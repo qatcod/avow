@@ -2,7 +2,12 @@
 from __future__ import annotations
 
 import ast
+import shutil
+import tempfile
 from dataclasses import dataclass
+from pathlib import Path
+
+from forge.runner import Runner
 
 
 @dataclass
@@ -89,3 +94,63 @@ def ast_mutants(source: str) -> list[Mutant]:
         ast.fix_missing_locations(tree)
         out.append(Mutant(source=ast.unparse(tree), description=m.description, origin="ast"))
     return out
+
+
+@dataclass
+class Survivor:
+    file: str
+    description: str
+    origin: str
+
+
+@dataclass
+class MutationResult:
+    total: int
+    killed: int
+    survived: int
+    score: float
+    survivors: list[Survivor]
+    llm_input_tokens: int = 0
+    llm_output_tokens: int = 0
+
+
+def run_mutation_testing(
+    solution_dir,
+    frozen_tests,
+    test_command,
+    *,
+    max_ast_mutants: int = 50,
+    llm_n: int = 0,
+    timeout: int = 120,
+    client=None,
+    model=None,
+    goal: str = "",
+) -> MutationResult:
+    solution_dir = Path(solution_dir)
+    modules = sorted(solution_dir.glob("*.py"))
+
+    pool: list[tuple[str, Mutant]] = []
+    for mod in modules:
+        for m in ast_mutants(mod.read_text(encoding="utf-8")):
+            pool.append((mod.name, m))
+    pool = pool[:max_ast_mutants]
+
+    # llm_n / client / model / goal are wired in Task 4 (hybrid).
+    llm_input = llm_output = 0
+
+    killed = 0
+    survivors: list[Survivor] = []
+    for mod_name, mut in pool:
+        with tempfile.TemporaryDirectory(prefix="forge-mut-") as tmp:
+            sol = Path(tmp) / "sol"
+            shutil.copytree(solution_dir, sol)
+            (sol / mod_name).write_text(mut.source, encoding="utf-8")
+            result = Runner(sol, frozen_tests, test_command, timeout=timeout).run()
+        if not result.is_green:
+            killed += 1
+        else:
+            survivors.append(Survivor(file=mod_name, description=mut.description, origin=mut.origin))
+
+    total = len(pool)
+    score = 1.0 if total == 0 else killed / total
+    return MutationResult(total, killed, total - killed, score, survivors, llm_input, llm_output)
