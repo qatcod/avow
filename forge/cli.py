@@ -29,30 +29,25 @@ def main(argv: list[str] | None = None) -> int:
     goal_dir = Path(args.goal_dir)
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
     write_tests = not args.no_regenerate
-
     examiner = build_examiner(config) if write_tests else _NullExaminer()
 
+    confirm = None
     if write_tests and not args.yes:
-        ex = examiner.write_tests((goal_dir / "goal.md").read_text())
-        print("=== proposed test plan ===")
-        print(ex.suite.test_plan)
-        if input("Approve and start the build loop? [y/N] ").strip().lower() != "y":
-            print("Aborted.")
-            return 1
-        # Re-use the just-written suite by persisting it and switching off regeneration.
-        from forge.examiner import split_suite
-        from forge.loop import _write_tests
-        visible, held = split_suite(ex.suite.tests, config.holdout_fraction)
-        _write_tests(goal_dir / "tests_frozen", visible)
-        _write_tests(goal_dir / "tests_holdout", held)
-        write_tests = False
+        def confirm(plan: str) -> bool:
+            print("=== proposed test plan ===")
+            print(plan)
+            return input("Approve and start the build loop? [y/N] ").strip().lower() == "y"
 
-    builder = Builder(model=config.builder_model)
-    result = solve(goal_dir, config, examiner, builder, write_tests=write_tests)
+    builder = Builder(model=config.builder_model, timeout=config.builder_timeout_seconds)
+    result = solve(goal_dir, config, examiner, builder, write_tests=write_tests, confirm=confirm)
 
+    if result.reason == "aborted":
+        print("Aborted.")
+        return 1
     print(f"\nresult: success={result.success} reason={result.reason} "
           f"score={result.best_score:.2f} iterations={result.iterations}")
-    print(f"best solution: {result.best_dir}")
+    if result.best_dir is not None:
+        print(f"best solution: {result.best_dir}")
     return 0 if result.success else 2
 
 

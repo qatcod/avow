@@ -12,6 +12,8 @@ def test_defaults_are_sane():
     assert cfg.max_wall_seconds == 3600
     assert cfg.test_command == ["python", "-m", "pytest", "-q"]
     assert cfg.holdout_fraction == 0.25
+    assert cfg.builder_timeout_seconds == 600
+    assert cfg.test_timeout_seconds == 120
 
 
 def test_from_yaml_overrides_then_falls_back(tmp_path: Path):

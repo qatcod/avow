@@ -15,6 +15,8 @@ class RunConfig(BaseModel):
     max_wall_seconds: int = 3600
     test_command: list[str] = Field(default_factory=lambda: ["python", "-m", "pytest", "-q"])
     holdout_fraction: float = 0.25
+    builder_timeout_seconds: int = 600
+    test_timeout_seconds: int = 120
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "RunConfig":

@@ -19,7 +19,7 @@ class SolveResult:
     best_score: float
     iterations: int
     reason: str
-    best_dir: Path
+    best_dir: Path | None
 
 
 def _write_tests(dest: Path, tests: list[TestFile]) -> None:
@@ -39,6 +39,7 @@ def solve(
     *,
     now=time.monotonic,
     write_tests: bool = True,
+    confirm=None,
 ) -> SolveResult:
     goal_dir = Path(goal_dir)
     goal = (goal_dir / "goal.md").read_text()
@@ -61,15 +62,17 @@ def solve(
         visible, held = split_suite(ex.suite.tests, config.holdout_fraction)
         _write_tests(frozen, visible)
         _write_tests(holdout, held)
+        if confirm is not None and not confirm(ex.suite.test_plan):
+            return SolveResult(False, 0.0, 0, "aborted", None)
 
     log = RunLog(forge_dir / "run.jsonl")
     workspace = Workspace(forge_dir / "ws")
-    runner = Runner(workspace.solution_dir, frozen, config.test_command)
+    runner = Runner(workspace.solution_dir, frozen, config.test_command, timeout=config.test_timeout_seconds)
 
     best_score = -1.0
     have_best = False
     rounds_without_improvement = 0
-    last_failures: list = []
+    best_failures: list = []
     reason = "max_iterations"
 
     while True:
@@ -81,11 +84,10 @@ def solve(
         budget.tick_iteration()
         workspace.seed_from(best_dir if have_best else None)
 
-        outcome = builder.attempt(workspace.solution_dir, goal, last_failures)
+        outcome = builder.attempt(workspace.solution_dir, goal, best_failures)
         budget.charge_usd(outcome.cost_usd)
 
         result = runner.run()
-        last_failures = result.failures
 
         log.record(AttemptRecord(
             iteration=budget.iterations,
@@ -102,6 +104,7 @@ def solve(
             workspace.promote_to(best_dir)
             best_score = result.score
             have_best = True
+            best_failures = result.failures
             rounds_without_improvement = 0
         else:
             rounds_without_improvement += 1
@@ -118,10 +121,13 @@ def solve(
             reason = "max_iterations"
             break
 
-    return SolveResult(False, max(best_score, 0.0), budget.iterations, reason, best_dir)
+    return SolveResult(
+        False, max(best_score, 0.0), budget.iterations, reason,
+        best_dir if have_best else None,
+    )
 
 
 def _holdout_green(holdout: Path, best_dir: Path, config: RunConfig) -> bool:
     if not holdout.exists() or not any(holdout.iterdir()):
         return True  # no holdout configured → visible-green is the verdict
-    return Runner(best_dir, holdout, config.test_command).run().is_green
+    return Runner(best_dir, holdout, config.test_command, timeout=config.test_timeout_seconds).run().is_green

@@ -33,9 +33,10 @@ class BuilderOutcome:
 
 
 class Builder:
-    def __init__(self, model: str, runner=subprocess.run) -> None:
+    def __init__(self, model: str, runner=subprocess.run, timeout: int = 600) -> None:
         self.model = model
         self.runner = runner
+        self.timeout = timeout
 
     def attempt(self, solution_dir: Path, goal: str, failures: list[FailureInfo]) -> BuilderOutcome:
         prompt = _PROMPT.format(goal=goal, failures_block=self._failures_block(failures))
@@ -45,7 +46,10 @@ class Builder:
             "--dangerously-skip-permissions",
             "--model", self.model,
         ]
-        proc = self.runner(cmd, cwd=Path(solution_dir), capture_output=True, text=True)
+        try:
+            proc = self.runner(cmd, cwd=Path(solution_dir), capture_output=True, text=True, timeout=self.timeout)
+        except subprocess.TimeoutExpired:
+            return BuilderOutcome(plan=f"builder timed out after {self.timeout}s", cost_usd=0.0, raw={})
         return self._parse(proc)
 
     @staticmethod

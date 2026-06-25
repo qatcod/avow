@@ -24,11 +24,13 @@ GOAL:
 
 
 class TestFile(BaseModel):
+    __test__ = False
     path: str
     content: str
 
 
 class TestSuite(BaseModel):
+    __test__ = False
     test_plan: str
     tests: list[TestFile]
 

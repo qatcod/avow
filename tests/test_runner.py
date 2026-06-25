@@ -39,3 +39,5 @@ def test_runner_restores_tests_each_run(tmp_path: Path):
     # The frozen test was restored over the fake, so the real (failing) assertion ran.
     assert r.is_green is False and r.failed == 1
     assert any("test_add" in f.nodeid for f in r.failures)
+    # Runner grades in an ephemeral copy: the real solution dir must NOT gain the frozen tests.
+    assert (solution / "tests" / "test_lib.py").read_text() == "def test_add():\n    assert True\n"

@@ -11,6 +11,7 @@ class FailureInfo:
 
 @dataclass
 class TestResult:
+    __test__ = False
     passed: int
     failed: int
     errors: int

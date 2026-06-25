@@ -8,7 +8,7 @@ from forge.scoring import FailureInfo
 def test_attempt_invokes_claude_and_parses_json(tmp_path: Path):
     captured = {}
 
-    def fake_runner(cmd, cwd=None, capture_output=False, text=False):
+    def fake_runner(cmd, cwd=None, capture_output=False, text=False, timeout=None):
         captured["cmd"] = cmd
         captured["cwd"] = cwd
         return subprocess.CompletedProcess(
@@ -33,7 +33,7 @@ def test_attempt_invokes_claude_and_parses_json(tmp_path: Path):
 
 
 def test_attempt_tolerates_missing_cost_field(tmp_path: Path):
-    def fake_runner(cmd, cwd=None, capture_output=False, text=False):
+    def fake_runner(cmd, cwd=None, capture_output=False, text=False, timeout=None):
         return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"result": "done"}), stderr="")
 
     out = Builder(model="claude-opus-4-8", runner=fake_runner).attempt(tmp_path, "goal", [])
@@ -41,7 +41,7 @@ def test_attempt_tolerates_missing_cost_field(tmp_path: Path):
 
 
 def test_attempt_handles_nonjson_stdout(tmp_path: Path):
-    def fake_runner(cmd, cwd=None, capture_output=False, text=False):
+    def fake_runner(cmd, cwd=None, capture_output=False, text=False, timeout=None):
         return subprocess.CompletedProcess(cmd, 1, stdout="boom not json", stderr="err")
 
     out = Builder(model="claude-opus-4-8", runner=fake_runner).attempt(tmp_path, "goal", [])
