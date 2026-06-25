@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Test / tooling
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Forge runtime artifacts (per-goal workspaces, logs, best-so-far snapshots)
+.forge/
+
+# Subagent-driven-development scratch (progress ledger, briefs, reports)
+.superpowers/
+
+# OS
+.DS_Store
