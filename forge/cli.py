@@ -94,6 +94,25 @@ def _cmd_verify(args) -> int:
     return 0
 
 
+def _cmd_propertize(args) -> int:
+    import anthropic
+    from forge.properties import generate_property_tests
+
+    config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
+    goal = Path(args.goal_file).read_text(encoding="utf-8")
+    props, _in, _out = generate_property_tests(
+        goal, anthropic.Anthropic(), config.property_model, config.property_tests_n)
+
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for tf in props:
+        name = Path(tf.path).name
+        (out_dir / name).write_text(tf.content, encoding="utf-8")
+        print(f"wrote {name}")
+    print(f"\n{len(props)} property test file(s) written to {out_dir}")
+    return 0
+
+
 def build_examiner(config: RunConfig) -> Examiner:
     import anthropic  # imported lazily so unit tests don't need network/creds
     return Examiner(anthropic.Anthropic(), model=config.examiner_model)
@@ -127,6 +146,11 @@ def main(argv: list[str] | None = None) -> int:
     ver_p.add_argument("goal_file")
     ver_p.add_argument("--config", default=None)
     ver_p.add_argument("--llm", action="store_true", help="also use cross-model LLM mutants")
+    prop_p = sub.add_parser("propertize",
+                            help="generate Hypothesis property/metamorphic tests for a goal")
+    prop_p.add_argument("goal_file")
+    prop_p.add_argument("out_dir")
+    prop_p.add_argument("--config", default=None)
     args = parser.parse_args(argv)
 
     if args.command == "mutate":
@@ -137,6 +161,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "verify":
         return _cmd_verify(args)
+
+    if args.command == "propertize":
+        return _cmd_propertize(args)
 
     goal_dir = Path(args.goal_dir)
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
