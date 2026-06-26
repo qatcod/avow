@@ -160,6 +160,10 @@ def run_mutation_testing(
             llm_input += i_tok
             llm_output += o_tok
             for m in ms:
+                try:
+                    ast.parse(m.source)
+                except SyntaxError:
+                    continue  # drop unparseable LLM mutants — they'd trivially "kill" and inflate the score
                 pool.append((mod.name, m))
 
     killed = 0

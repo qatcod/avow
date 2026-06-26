@@ -27,9 +27,14 @@ class Runner:
         with tempfile.TemporaryDirectory(prefix="forge-grade-") as tmp:
             graded = Path(tmp) / "graded"
             shutil.copytree(self.solution_dir, graded)
+            # Anti-cheat: grade ONLY against the frozen suite. Strip any builder-authored
+            # tests — a tests/ dir, root-level test files, or a root conftest — so they
+            # cannot affect collection or inflate the score.
             tests_dir = graded / "tests"
             if tests_dir.exists():
                 shutil.rmtree(tests_dir)
+            for stray in (*graded.glob("test_*.py"), *graded.glob("*_test.py"), *graded.glob("conftest.py")):
+                stray.unlink()
             shutil.copytree(self.frozen_tests, tests_dir)
 
             fd, report_str = tempfile.mkstemp(suffix=".json")

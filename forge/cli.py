@@ -198,7 +198,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {_k}: {_v:.2f}")
     if result.best_dir is not None:
         print(f"best solution: {result.best_dir}")
-    return 0 if result.success else 2
+    if result.success:
+        return 0
+    return 3 if result.reason == "low_confidence" else 2
 
 
 class _NullExaminer:

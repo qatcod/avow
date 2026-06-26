@@ -20,6 +20,8 @@ Most "autonomous coder" demos stop at *the tests pass*. That's the easy 20%. The
 | **Intent** | Do the tests test the *right* goal? | a different model reads the suite *blind*, restates the goal, compare |
 | **Property** | Do invariants hold for *all* inputs? | Hypothesis property/metamorphic tests fuzzed during the build |
 
+> Behavioral-green is the precondition (not a confidence input); property tests are folded into the frozen suite (they raise the bar for *green* and *mutation* rather than appearing as a separate number). The aggregated confidence breakdown is **hold-out + mutation + intent**.
+
 These combine into a **calibrated confidence** with a transparent per-signal breakdown. `done = green ∧ confidence ≥ threshold`; below it, the run is flagged `low_confidence` or escalated to a human.
 
 ## Anti-cheat & honesty (load-bearing)
