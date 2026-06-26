@@ -2,7 +2,7 @@ from pathlib import Path
 from forge.cli import main
 
 
-def test_cli_runs_with_injected_no_regenerate(tmp_path: Path, monkeypatch):
+def test_cli_runs_with_injected_no_regenerate(tmp_path: Path, monkeypatch, capsys):
     # Pre-seed a goal and frozen tests so --no-regenerate skips the Examiner (no network).
     (tmp_path / "goal.md").write_text("Build add(a, b) returning a + b.")
     frozen = tmp_path / "tests_frozen"
@@ -29,3 +29,5 @@ def test_cli_runs_with_injected_no_regenerate(tmp_path: Path, monkeypatch):
     rc = main(["solve", str(tmp_path), "--no-regenerate", "--yes"])
     assert rc == 0
     assert (tmp_path / ".forge" / "best" / "lib.py").exists()
+    out = capsys.readouterr().out
+    assert "confidence:" in out

@@ -84,7 +84,8 @@ def _cmd_verify(args) -> int:
     print("breakdown:")
     for k, v in conf.breakdown.items():
         print(f"  {k}: {v:.2f}  (weight {conf.weights_used[k]:.2f})")
-    print(f"\nmutation: {mr.killed}/{mr.total} killed, {mr.survived} survivors")
+    if mr.baseline_green:
+        print(f"\nmutation: {mr.killed}/{mr.total} killed, {mr.survived} survivors")
     print(f"intent inferred goal: {ir.inferred_goal}")
     if ir.divergences:
         print("intent divergences:")
@@ -157,6 +158,10 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     print(f"\nresult: success={result.success} reason={result.reason} "
           f"score={result.best_score:.2f} iterations={result.iterations}")
+    if result.confidence is not None:
+        print(f"confidence: {result.confidence:.2f}")
+        for _k, _v in result.confidence_breakdown.items():
+            print(f"  {_k}: {_v:.2f}")
     if result.best_dir is not None:
         print(f"best solution: {result.best_dir}")
     return 0 if result.success else 2
