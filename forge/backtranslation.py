@@ -72,3 +72,30 @@ def judge_intent_match(original_goal: str, inferred_goal: str, client, model: st
         getattr(usage, "input_tokens", 0),
         getattr(usage, "output_tokens", 0),
     )
+
+
+@dataclass
+class IntentResult:
+    score: float
+    inferred_goal: str
+    divergences: list[str]
+    input_tokens: int
+    output_tokens: int
+
+
+def run_intent_check(goal: str, frozen_tests_dir, client, model: str) -> IntentResult:
+    frozen_tests_dir = Path(frozen_tests_dir)
+    parts = []
+    for f in sorted(frozen_tests_dir.glob("test_*.py")):
+        parts.append(f"# ===== {f.name} =====\n{f.read_text(encoding='utf-8')}")
+    test_sources = "\n\n".join(parts)
+
+    inferred, in1, out1 = back_translate(test_sources, client, model)
+    match, in2, out2 = judge_intent_match(goal, inferred, client, model)
+    return IntentResult(
+        score=match.score,
+        inferred_goal=inferred,
+        divergences=match.divergences,
+        input_tokens=in1 + in2,
+        output_tokens=out1 + out2,
+    )
