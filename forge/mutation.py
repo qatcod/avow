@@ -114,6 +114,7 @@ class MutationResult:
     survivors: list[Survivor]
     llm_input_tokens: int = 0
     llm_output_tokens: int = 0
+    baseline_green: bool = True
 
 
 def run_mutation_testing(
@@ -129,18 +130,33 @@ def run_mutation_testing(
     goal: str = "",
 ) -> MutationResult:
     solution_dir = Path(solution_dir)
-    modules = sorted(solution_dir.glob("*.py"))
 
+    # Baseline guard: a kill rate is only meaningful if the suite passes on the
+    # unmutated solution. Otherwise every mutant "fails" too and the score is a lie.
+    baseline = Runner(solution_dir, frozen_tests, test_command, timeout=timeout).run()
+    if not baseline.is_green:
+        return MutationResult(0, 0, 0, 0.0, [], 0, 0, baseline_green=False)
+
+    modules = sorted(solution_dir.glob("*.py"))
     pool: list[tuple[str, Mutant]] = []
     for mod in modules:
-        for m in ast_mutants(mod.read_text(encoding="utf-8")):
+        try:
+            src = mod.read_text(encoding="utf-8")
+            ms = ast_mutants(src)
+        except (SyntaxError, ValueError, UnicodeDecodeError):
+            continue  # skip modules we can't parse/decode (the tool runs on any repo)
+        for m in ms:
             pool.append((mod.name, m))
     pool = pool[:max_ast_mutants]
 
     llm_input = llm_output = 0
     if llm_n and client is not None:
         for mod in modules:
-            ms, i_tok, o_tok = llm_mutants(mod.read_text(encoding="utf-8"), goal, client, model, llm_n)
+            try:
+                src = mod.read_text(encoding="utf-8")
+            except (UnicodeDecodeError, OSError):
+                continue
+            ms, i_tok, o_tok = llm_mutants(src, goal, client, model, llm_n)
             llm_input += i_tok
             llm_output += o_tok
             for m in ms:
@@ -161,7 +177,7 @@ def run_mutation_testing(
 
     total = len(pool)
     score = 1.0 if total == 0 else killed / total
-    return MutationResult(total, killed, total - killed, score, survivors, llm_input, llm_output)
+    return MutationResult(total, killed, total - killed, score, survivors, llm_input, llm_output, baseline_green=True)
 
 
 class _MutantSpec(BaseModel):

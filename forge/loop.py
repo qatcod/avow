@@ -118,6 +118,7 @@ def solve(
                 mscore: float | None = None
                 surv = 0
                 if config.mutation_enabled:
+                    before = budget.spent_usd
                     mr = run_mutation_testing(
                         best_dir, frozen, config.test_command,
                         max_ast_mutants=config.max_ast_mutants,
@@ -130,7 +131,7 @@ def solve(
                     log.record(AttemptRecord(
                         iteration=budget.iterations, score=result.score, is_green=True,
                         diff_summary=f"mutation {mscore:.2f} ({mr.killed}/{mr.total}), {surv} survivors",
-                        failing=[], plan="mutation testing", cost_usd=0.0,
+                        failing=[], plan="mutation testing", cost_usd=budget.spent_usd - before,
                     ))
                 return SolveResult(True, best_score, budget.iterations, "green", best_dir, mscore, surv)
             return SolveResult(False, best_score, budget.iterations, "overfit_on_holdout", best_dir)

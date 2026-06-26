@@ -26,6 +26,10 @@ def _cmd_mutate(args) -> int:
         max_ast_mutants=config.max_ast_mutants, llm_n=llm_n,
         timeout=config.test_timeout_seconds, client=client, model=model, goal="",
     )
+    if not result.baseline_green:
+        print("suite is not green on the unmutated solution — cannot score "
+              "(fix the suite or the solution first)")
+        return 1
     print(f"mutation score: {result.score:.2f}  ({result.killed}/{result.total} killed)")
     if result.survivors:
         print(f"\n{result.survived} survivors (potential test gaps):")

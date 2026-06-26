@@ -45,3 +45,23 @@ def test_no_mutants_scores_vacuously_one(tmp_path: Path):
     (frozen / "test_x.py").write_text("def test_ok(): assert True\n")
     r = run_mutation_testing(sol, frozen, CMD)
     assert r.total == 0 and r.score == 1.0 and r.survivors == []
+
+
+def test_baseline_not_green_returns_unscored(tmp_path):
+    sol, frozen = _make(
+        tmp_path, "def add(a, b):\n    return a - b\n",   # WRONG: suite won't pass
+        "from lib import add\ndef test_it(): assert add(2, 3) == 5\n",
+    )
+    r = run_mutation_testing(sol, frozen, CMD)
+    assert r.baseline_green is False
+    assert r.total == 0 and r.survivors == [] and r.score == 0.0
+
+
+def test_unparseable_module_is_skipped(tmp_path):
+    sol, frozen = _make(
+        tmp_path, "def add(a, b):\n    return a + b\n",
+        "from lib import add\ndef test_it(): assert add(2, 3) == 5\n",
+    )
+    (sol / "broken.py").write_text("def f(:\n    pass\n")  # syntax error, not a test file
+    r = run_mutation_testing(sol, frozen, CMD)   # must NOT raise
+    assert r.baseline_green is True and r.total >= 1
