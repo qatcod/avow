@@ -23,6 +23,10 @@ class RunConfig(BaseModel):
     mutation_enabled: bool = True
     backtranslation_model: str = "claude-opus-4-8"
     intent_check_enabled: bool = True
+    confidence_threshold: float = 0.7
+    confidence_weights: dict[str, float] = Field(
+        default_factory=lambda: {"holdout": 1.0, "mutation": 1.0, "intent": 1.0})
+    confidence_gating: bool = True
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "RunConfig":

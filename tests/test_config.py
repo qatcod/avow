@@ -20,6 +20,9 @@ def test_defaults_are_sane():
     assert cfg.mutation_enabled is True
     assert cfg.backtranslation_model == "claude-opus-4-8"
     assert cfg.intent_check_enabled is True
+    assert cfg.confidence_threshold == 0.7
+    assert cfg.confidence_weights == {"holdout": 1.0, "mutation": 1.0, "intent": 1.0}
+    assert cfg.confidence_gating is True
 
 
 def test_from_yaml_overrides_then_falls_back(tmp_path: Path):
