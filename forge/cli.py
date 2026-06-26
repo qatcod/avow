@@ -9,6 +9,31 @@ from forge.examiner import Examiner
 from forge.loop import solve
 
 
+def _cmd_mutate(args) -> int:
+    from forge.mutation import run_mutation_testing
+
+    config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
+    client = model = None
+    llm_n = 0
+    if args.llm:
+        import anthropic
+        client = anthropic.Anthropic()
+        model = config.mutation_model
+        llm_n = config.llm_mutants_n
+
+    result = run_mutation_testing(
+        Path(args.solution_dir), Path(args.tests_dir), config.test_command,
+        max_ast_mutants=config.max_ast_mutants, llm_n=llm_n,
+        timeout=config.test_timeout_seconds, client=client, model=model, goal="",
+    )
+    print(f"mutation score: {result.score:.2f}  ({result.killed}/{result.total} killed)")
+    if result.survivors:
+        print(f"\n{result.survived} survivors (potential test gaps):")
+        for s in result.survivors:
+            print(f"  - [{s.origin}] {s.file}: {s.description}")
+    return 0
+
+
 def build_examiner(config: RunConfig) -> Examiner:
     import anthropic  # imported lazily so unit tests don't need network/creds
     return Examiner(anthropic.Anthropic(), model=config.examiner_model)
@@ -24,7 +49,16 @@ def main(argv: list[str] | None = None) -> int:
                          help="reuse existing tests_frozen/ instead of calling the Examiner")
     solve_p.add_argument("--yes", action="store_true",
                          help="skip the human approval gate on the generated test plan")
+    mut_p = sub.add_parser("mutate", help="score a test suite's strength via mutation testing")
+    mut_p.add_argument("solution_dir")
+    mut_p.add_argument("tests_dir")
+    mut_p.add_argument("--config", default=None)
+    mut_p.add_argument("--llm", action="store_true",
+                       help="also generate a few cross-model LLM mutants")
     args = parser.parse_args(argv)
+
+    if args.command == "mutate":
+        return _cmd_mutate(args)
 
     goal_dir = Path(args.goal_dir)
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
