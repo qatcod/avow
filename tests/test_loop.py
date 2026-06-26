@@ -209,6 +209,33 @@ def test_loop_no_property_client_skips(tmp_path):
     assert not (tmp_path / "tests_frozen" / "test_prop_comm.py").exists()
 
 
+def test_loop_panel_disagreement_floor(tmp_path):
+    from types import SimpleNamespace
+    from forge.backtranslation import _InferredGoal, IntentMatch
+
+    class DisagreeingPanel:
+        @property
+        def messages(self):
+            return self
+
+        def parse(self, *, model, output_format, **kwargs):
+            if output_format is _InferredGoal:
+                po = _InferredGoal(inferred_goal="add")
+            else:
+                # high consensus, high disagreement: spread 0.8 -> agreement 0.2 < floor 0.5
+                score = {"claude-opus-4-8": 1.0, "claude-sonnet-4-6": 1.0, "claude-haiku-4-5": 0.2}[model]
+                po = IntentMatch(score=score, divergences=[])
+            return SimpleNamespace(parsed_output=po, usage=SimpleNamespace(input_tokens=1, output_tokens=1))
+
+    cfg = RunConfig(max_iterations=5, holdout_fraction=0.0)
+    r = solve(_goal(tmp_path), cfg, StubExaminer(), FlakyBuilder(), now=lambda: 0.0,
+              intent_client=DisagreeingPanel())
+    # consensus 0.733, confidence (1.0 + 1.0 + 0.733)/3 = 0.911 >= 0.7 (would be green),
+    # but agreement 0.2 < 0.5 floor -> forced low_confidence.
+    assert r.reason == "low_confidence" and r.success is False
+    assert r.intent_score == pytest.approx((1.0 + 1.0 + 0.2) / 3)
+
+
 def test_loop_holdout_floor_vetoes_high_average(tmp_path):
     class FloorExaminer(Examiner):
         def __init__(self):

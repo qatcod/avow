@@ -10,6 +10,7 @@ from forge.config import RunConfig
 from forge.examiner import Examiner, TestFile, split_suite
 from forge.memory import AttemptRecord, RunLog
 from forge.backtranslation import run_intent_check
+from forge.panel import panel_intent_check
 from forge.mutation import run_mutation_testing
 from forge.runner import Runner
 from forge.workspace import Workspace
@@ -70,6 +71,7 @@ def solve(
     )
 
     intent_score = None
+    panel_agreement = None
 
     if write_tests:
         ex = examiner.write_tests(goal)
@@ -86,15 +88,28 @@ def solve(
             return SolveResult(False, 0.0, 0, "aborted", None)
         if config.intent_check_enabled and intent_client is not None:
             before = budget.spent_usd
-            ir = run_intent_check(goal, frozen, intent_client, config.backtranslation_model)
-            budget.charge_tokens(config.backtranslation_model, ir.input_tokens, ir.output_tokens)
-            intent_score = ir.score
-            RunLog(forge_dir / "run.jsonl").record(AttemptRecord(
-                iteration=0, score=0.0, is_green=False,
-                diff_summary=f"intent match {ir.score:.2f}; {len(ir.divergences)} divergences",
-                failing=ir.divergences, plan="intent check: " + ir.inferred_goal[:160],
-                cost_usd=budget.spent_usd - before,
-            ))
+            if config.panel_enabled and len(config.panel_models) > 1:
+                pr = panel_intent_check(goal, frozen, intent_client, config.panel_models)
+                for _m, _i, _o in pr.usage:
+                    budget.charge_tokens(_m, _i, _o)
+                intent_score = pr.score
+                panel_agreement = pr.agreement
+                RunLog(forge_dir / "run.jsonl").record(AttemptRecord(
+                    iteration=0, score=0.0, is_green=False,
+                    diff_summary=f"intent {pr.score:.2f} agreement {pr.agreement:.2f}; {len(pr.divergences)} divergences",
+                    failing=pr.divergences, plan="panel intent: " + pr.inferred_goal[:160],
+                    cost_usd=budget.spent_usd - before,
+                ))
+            else:
+                ir = run_intent_check(goal, frozen, intent_client, config.backtranslation_model)
+                budget.charge_tokens(config.backtranslation_model, ir.input_tokens, ir.output_tokens)
+                intent_score = ir.score
+                RunLog(forge_dir / "run.jsonl").record(AttemptRecord(
+                    iteration=0, score=0.0, is_green=False,
+                    diff_summary=f"intent match {ir.score:.2f}; {len(ir.divergences)} divergences",
+                    failing=ir.divergences, plan="intent check: " + ir.inferred_goal[:160],
+                    cost_usd=budget.spent_usd - before,
+                ))
 
     log = RunLog(forge_dir / "run.jsonl")
     workspace = Workspace(forge_dir / "ws")
@@ -170,7 +185,10 @@ def solve(
                 failing=[], plan="confidence", cost_usd=mut_cost,
             ))
 
-            floor_breached = config.confidence_gating and holdout_score < config.holdout_floor
+            floor_breached = config.confidence_gating and (
+                holdout_score < config.holdout_floor
+                or (panel_agreement is not None and panel_agreement < config.panel_agreement_floor)
+            )
             gated = floor_breached or (
                 config.confidence_gating and confidence is not None
                 and confidence < config.confidence_threshold)
