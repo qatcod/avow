@@ -9,6 +9,7 @@ from forge.budget import Budget
 from forge.config import RunConfig
 from forge.examiner import Examiner, TestFile, split_suite
 from forge.memory import AttemptRecord, RunLog
+from forge.backtranslation import run_intent_check
 from forge.mutation import run_mutation_testing
 from forge.runner import Runner
 from forge.workspace import Workspace
@@ -23,6 +24,7 @@ class SolveResult:
     best_dir: Path | None
     mutation_score: float | None = None
     survivors: int = 0
+    intent_score: float | None = None
 
 
 def _write_tests(dest: Path, tests: list[TestFile]) -> None:
@@ -44,6 +46,7 @@ def solve(
     write_tests: bool = True,
     confirm=None,
     mutation_client=None,
+    intent_client=None,
 ) -> SolveResult:
     goal_dir = Path(goal_dir)
     goal = (goal_dir / "goal.md").read_text()
@@ -60,6 +63,8 @@ def solve(
         started_at=now(),
     )
 
+    intent_score = None
+
     if write_tests:
         ex = examiner.write_tests(goal)
         budget.charge_tokens(config.examiner_model, ex.input_tokens, ex.output_tokens)
@@ -68,6 +73,15 @@ def solve(
         _write_tests(holdout, held)
         if confirm is not None and not confirm(ex.suite.test_plan):
             return SolveResult(False, 0.0, 0, "aborted", None)
+        if config.intent_check_enabled and intent_client is not None:
+            ir = run_intent_check(goal, frozen, intent_client, config.backtranslation_model)
+            budget.charge_tokens(config.backtranslation_model, ir.input_tokens, ir.output_tokens)
+            intent_score = ir.score
+            RunLog(forge_dir / "run.jsonl").record(AttemptRecord(
+                iteration=0, score=0.0, is_green=False,
+                diff_summary=f"intent match {ir.score:.2f}; {len(ir.divergences)} divergences",
+                failing=[], plan="intent check", cost_usd=0.0,
+            ))
 
     log = RunLog(forge_dir / "run.jsonl")
     workspace = Workspace(forge_dir / "ws")
@@ -133,8 +147,8 @@ def solve(
                         diff_summary=f"mutation {mscore:.2f} ({mr.killed}/{mr.total}), {surv} survivors",
                         failing=[], plan="mutation testing", cost_usd=budget.spent_usd - before,
                     ))
-                return SolveResult(True, best_score, budget.iterations, "green", best_dir, mscore, surv)
-            return SolveResult(False, best_score, budget.iterations, "overfit_on_holdout", best_dir)
+                return SolveResult(True, best_score, budget.iterations, "green", best_dir, mscore, surv, intent_score=intent_score)
+            return SolveResult(False, best_score, budget.iterations, "overfit_on_holdout", best_dir, intent_score=intent_score)
 
         if rounds_without_improvement >= config.plateau_patience:
             reason = "plateau"
@@ -145,7 +159,7 @@ def solve(
 
     return SolveResult(
         False, max(best_score, 0.0), budget.iterations, reason,
-        best_dir if have_best else None,
+        best_dir if have_best else None, intent_score=intent_score,
     )
 
 

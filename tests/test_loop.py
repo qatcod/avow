@@ -84,3 +84,33 @@ def test_loop_reports_mutation_score_on_green(tmp_path):
     # best solution is `return a + b`; the frozen test `add(2,3)==5` kills Add->Sub and Return->None.
     assert result.mutation_score == 1.0
     assert result.survivors == 0
+
+
+def test_loop_records_intent_score(tmp_path):
+    from types import SimpleNamespace
+    from forge.backtranslation import _InferredGoal, IntentMatch
+
+    class FakeIntentClient:
+        @property
+        def messages(self):
+            return self
+
+        def parse(self, *, output_format, **kwargs):
+            if output_format is _InferredGoal:
+                po = _InferredGoal(inferred_goal="add two numbers")
+            else:
+                po = IntentMatch(score=0.83, divergences=["x"])
+            return SimpleNamespace(parsed_output=po, usage=SimpleNamespace(input_tokens=3, output_tokens=4))
+
+    cfg = RunConfig(max_iterations=5, holdout_fraction=0.0)
+    result = solve(_goal(tmp_path), cfg, StubExaminer(), FlakyBuilder(),
+                   now=lambda: 0.0, intent_client=FakeIntentClient())
+    assert result.success is True
+    assert result.intent_score == 0.83
+
+
+def test_loop_intent_score_none_without_client(tmp_path):
+    cfg = RunConfig(max_iterations=5, holdout_fraction=0.0)
+    result = solve(_goal(tmp_path), cfg, StubExaminer(), FlakyBuilder(), now=lambda: 0.0)
+    assert result.success is True
+    assert result.intent_score is None  # no intent_client → hook skipped
