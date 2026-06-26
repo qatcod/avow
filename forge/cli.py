@@ -128,6 +128,8 @@ def main(argv: list[str] | None = None) -> int:
                          help="reuse existing tests_frozen/ instead of calling the Examiner")
     solve_p.add_argument("--yes", action="store_true",
                          help="skip the human approval gate on the generated test plan")
+    solve_p.add_argument("--no-llm-verify", action="store_true",
+                         help="skip the LLM verification hooks (intent check + property tests) for a cheaper run")
     mut_p = sub.add_parser("mutate", help="score a test suite's strength via mutation testing")
     mut_p.add_argument("solution_dir")
     mut_p.add_argument("tests_dir")
@@ -177,8 +179,13 @@ def main(argv: list[str] | None = None) -> int:
             print(plan)
             return input("Approve and start the build loop? [y/N] ").strip().lower() == "y"
 
+    verify_client = None
+    if write_tests and not args.no_llm_verify:
+        import anthropic
+        verify_client = anthropic.Anthropic()
     builder = Builder(model=config.builder_model, timeout=config.builder_timeout_seconds)
-    result = solve(goal_dir, config, examiner, builder, write_tests=write_tests, confirm=confirm)
+    result = solve(goal_dir, config, examiner, builder, write_tests=write_tests, confirm=confirm,
+                   intent_client=verify_client, property_client=verify_client)
 
     if result.reason == "aborted":
         print("Aborted.")
