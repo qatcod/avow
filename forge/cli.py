@@ -38,6 +38,23 @@ def _cmd_mutate(args) -> int:
     return 0
 
 
+def _cmd_intent_check(args) -> int:
+    import anthropic
+    from forge.backtranslation import run_intent_check
+
+    config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
+    goal = Path(args.goal_file).read_text(encoding="utf-8")
+    result = run_intent_check(goal, Path(args.tests_dir),
+                              anthropic.Anthropic(), config.backtranslation_model)
+    print(f"intent match: {result.score:.2f}")
+    print(f"\ninferred goal (from the tests alone):\n{result.inferred_goal}")
+    if result.divergences:
+        print("\ndivergences (goal vs what the tests actually pin down):")
+        for d in result.divergences:
+            print(f"  - {d}")
+    return 0
+
+
 def build_examiner(config: RunConfig) -> Examiner:
     import anthropic  # imported lazily so unit tests don't need network/creds
     return Examiner(anthropic.Anthropic(), model=config.examiner_model)
@@ -59,10 +76,18 @@ def main(argv: list[str] | None = None) -> int:
     mut_p.add_argument("--config", default=None)
     mut_p.add_argument("--llm", action="store_true",
                        help="also generate a few cross-model LLM mutants")
+    ic_p = sub.add_parser("intent-check",
+                          help="back-translate a test suite and score how well it matches a goal")
+    ic_p.add_argument("goal_file")
+    ic_p.add_argument("tests_dir")
+    ic_p.add_argument("--config", default=None)
     args = parser.parse_args(argv)
 
     if args.command == "mutate":
         return _cmd_mutate(args)
+
+    if args.command == "intent-check":
+        return _cmd_intent_check(args)
 
     goal_dir = Path(args.goal_dir)
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
