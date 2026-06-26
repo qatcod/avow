@@ -173,6 +173,42 @@ def test_loop_gating_off_reports_only(tmp_path):
     assert r.confidence == pytest.approx((1.0 + 1.0 + 0.0) / 3)
 
 
+def test_loop_adds_property_tests_to_frozen_suite(tmp_path):
+    from types import SimpleNamespace
+    from forge.examiner import TestFile
+    from forge.properties import _PropertySet
+
+    class FakePropClient:
+        @property
+        def messages(self):
+            return self
+
+        def parse(self, *, output_format, **kwargs):
+            # A SATISFIABLE property: commutativity holds for `add(a, b) = a + b`.
+            po = _PropertySet(tests=[TestFile(
+                path="test_prop_comm.py",
+                content=("from lib import add\n"
+                         "from hypothesis import given, strategies as st\n"
+                         "@given(st.integers(), st.integers())\n"
+                         "def test_commutative(a, b):\n    assert add(a, b) == add(b, a)\n"),
+            )])
+            return SimpleNamespace(parsed_output=po, usage=SimpleNamespace(input_tokens=2, output_tokens=3))
+
+    cfg = RunConfig(max_iterations=5, holdout_fraction=0.0)
+    r = solve(_goal(tmp_path), cfg, StubExaminer(), FlakyBuilder(), now=lambda: 0.0,
+              property_client=FakePropClient())
+    # The commutativity property is satisfied by the converged `a + b`, so the run goes green.
+    assert r.success is True and r.reason == "green"
+    assert (tmp_path / "tests_frozen" / "test_prop_comm.py").exists()
+
+
+def test_loop_no_property_client_skips(tmp_path):
+    cfg = RunConfig(max_iterations=5, holdout_fraction=0.0)
+    r = solve(_goal(tmp_path), cfg, StubExaminer(), FlakyBuilder(), now=lambda: 0.0)
+    assert r.success is True
+    assert not (tmp_path / "tests_frozen" / "test_prop_comm.py").exists()
+
+
 def test_loop_holdout_floor_vetoes_high_average(tmp_path):
     class FloorExaminer(Examiner):
         def __init__(self):

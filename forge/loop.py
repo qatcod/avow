@@ -14,6 +14,7 @@ from forge.mutation import run_mutation_testing
 from forge.runner import Runner
 from forge.workspace import Workspace
 from forge.confidence import aggregate_confidence
+from forge.properties import generate_property_tests
 
 
 @dataclass
@@ -51,6 +52,7 @@ def solve(
     mutation_client=None,
     intent_client=None,
     escalate=None,
+    property_client=None,
 ) -> SolveResult:
     goal_dir = Path(goal_dir)
     goal = (goal_dir / "goal.md").read_text()
@@ -73,6 +75,11 @@ def solve(
         ex = examiner.write_tests(goal)
         budget.charge_tokens(config.examiner_model, ex.input_tokens, ex.output_tokens)
         visible, held = split_suite(ex.suite.tests, config.holdout_fraction)
+        if config.property_tests_enabled and property_client is not None:
+            props, p_in, p_out = generate_property_tests(
+                goal, property_client, config.property_model, config.property_tests_n)
+            budget.charge_tokens(config.property_model, p_in, p_out)
+            visible = visible + props
         _write_tests(frozen, visible)
         _write_tests(holdout, held)
         if confirm is not None and not confirm(ex.suite.test_plan):
