@@ -75,3 +75,12 @@ def test_loop_writes_frozen_tests_and_run_log(tmp_path: Path):
     assert (tmp_path / "tests_frozen" / "test_add.py").exists()
     log = (tmp_path / ".forge" / "run.jsonl").read_text().strip().splitlines()
     assert len(log) >= 1
+
+
+def test_loop_reports_mutation_score_on_green(tmp_path):
+    cfg = RunConfig(max_iterations=5, holdout_fraction=0.0)
+    result = solve(_goal(tmp_path), cfg, StubExaminer(), FlakyBuilder(), now=lambda: 0.0)
+    assert result.success is True
+    # best solution is `return a + b`; the frozen test `add(2,3)==5` kills Add->Sub and Return->None.
+    assert result.mutation_score == 1.0
+    assert result.survivors == 0
