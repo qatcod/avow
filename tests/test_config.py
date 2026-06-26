@@ -18,6 +18,8 @@ def test_defaults_are_sane():
     assert cfg.llm_mutants_n == 3
     assert cfg.mutation_model == "claude-sonnet-4-6"
     assert cfg.mutation_enabled is True
+    assert cfg.backtranslation_model == "claude-opus-4-8"
+    assert cfg.intent_check_enabled is True
 
 
 def test_from_yaml_overrides_then_falls_back(tmp_path: Path):

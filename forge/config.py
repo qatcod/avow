@@ -21,6 +21,8 @@ class RunConfig(BaseModel):
     llm_mutants_n: int = 3
     mutation_model: str = "claude-sonnet-4-6"
     mutation_enabled: bool = True
+    backtranslation_model: str = "claude-opus-4-8"
+    intent_check_enabled: bool = True
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "RunConfig":
