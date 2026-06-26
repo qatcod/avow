@@ -32,6 +32,9 @@ class RunConfig(BaseModel):
         default_factory=lambda: ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5"])
     panel_enabled: bool = True
     panel_agreement_floor: float = 0.5
+    max_expand_rounds: int = 3
+    ideator_model: str = "claude-opus-4-8"
+    ideas_n: int = 3
     property_tests_enabled: bool = True
     property_model: str = "claude-opus-4-8"
     property_tests_n: int = 4
