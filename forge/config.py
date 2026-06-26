@@ -27,6 +27,7 @@ class RunConfig(BaseModel):
     confidence_weights: dict[str, float] = Field(
         default_factory=lambda: {"holdout": 1.0, "mutation": 1.0, "intent": 1.0})
     confidence_gating: bool = True
+    holdout_floor: float = 0.5
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "RunConfig":

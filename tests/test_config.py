@@ -23,6 +23,7 @@ def test_defaults_are_sane():
     assert cfg.confidence_threshold == 0.7
     assert cfg.confidence_weights == {"holdout": 1.0, "mutation": 1.0, "intent": 1.0}
     assert cfg.confidence_gating is True
+    assert cfg.holdout_floor == 0.5
 
 
 def test_from_yaml_overrides_then_falls_back(tmp_path: Path):

@@ -171,3 +171,25 @@ def test_loop_gating_off_reports_only(tmp_path):
               intent_client=_fake_intent_client(0.0))
     assert r.success is True and r.reason == "green"  # low confidence, but not gated
     assert r.confidence == pytest.approx((1.0 + 1.0 + 0.0) / 3)
+
+
+def test_loop_holdout_floor_vetoes_high_average(tmp_path):
+    class FloorExaminer(Examiner):
+        def __init__(self):
+            pass
+
+        def write_tests(self, goal):
+            def t(name, rhs):
+                return TestFile(path=name,
+                                content=f"from lib import add\ndef test():\n    assert add(2, 3) == {rhs}\n")
+            suite = TestSuite(test_plan="add", tests=[t("test_a_ok.py", 5), t("test_z1.py", 5), t("test_z2.py", 6)])
+            return ExaminerResult(suite=suite, input_tokens=1, output_tokens=1)
+
+    # holdout_fraction 0.5 over 3 sorted tests holds out the last 2 (test_z1 pass, test_z2 fail) -> holdout 0.5;
+    # visible (test_a_ok) passes so the loop converges green.
+    cfg = RunConfig(max_iterations=5, holdout_fraction=0.5, holdout_floor=0.6)
+    r = solve(_goal(tmp_path), cfg, FloorExaminer(), FlakyBuilder(), now=lambda: 0.0,
+              intent_client=_fake_intent_client(1.0))
+    assert r.confidence_breakdown["holdout"] == pytest.approx(0.5)
+    assert r.confidence == pytest.approx((0.5 + 1.0 + 1.0) / 3)  # 0.833 — would clear the threshold
+    assert r.reason == "low_confidence" and r.success is False   # but the 0.5 < 0.6 floor vetoes it

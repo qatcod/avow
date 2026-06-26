@@ -163,8 +163,10 @@ def solve(
                 failing=[], plan="confidence", cost_usd=mut_cost,
             ))
 
-            gated = (config.confidence_gating and confidence is not None
-                     and confidence < config.confidence_threshold)
+            floor_breached = config.confidence_gating and holdout_score < config.holdout_floor
+            gated = floor_breached or (
+                config.confidence_gating and confidence is not None
+                and confidence < config.confidence_threshold)
             if not gated:
                 return SolveResult(True, best_score, budget.iterations, "green", best_dir,
                                    mscore, surv, intent_score=intent_score,
