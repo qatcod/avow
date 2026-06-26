@@ -113,6 +113,28 @@ def _cmd_propertize(args) -> int:
     return 0
 
 
+def _cmd_improve(args) -> int:
+    from forge.improve import improve
+
+    config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
+    examiner = build_examiner(config)
+    builder = Builder(model=config.builder_model, timeout=config.builder_timeout_seconds)
+
+    verify_client = None
+    if not args.no_llm_verify:
+        import anthropic
+        verify_client = anthropic.Anthropic()
+
+    result = improve(Path(args.goal_dir), config, examiner, builder,
+                     ideator_client=verify_client, intent_client=verify_client,
+                     property_client=verify_client)
+
+    print(f"result: success={result.success} expansions={result.expansions}")
+    for i, r in enumerate(result.rounds):
+        print(f"  round {i}: success={r.success} reason={r.reason} confidence={r.confidence}")
+    return 0 if result.success else 2
+
+
 def build_examiner(config: RunConfig) -> Examiner:
     import anthropic  # imported lazily so unit tests don't need network/creds
     return Examiner(anthropic.Anthropic(), model=config.examiner_model)
@@ -153,6 +175,11 @@ def main(argv: list[str] | None = None) -> int:
     prop_p.add_argument("goal_file")
     prop_p.add_argument("out_dir")
     prop_p.add_argument("--config", default=None)
+    improve_p = sub.add_parser("improve",
+                               help="self-improvement loop: converge, then propose & build next features")
+    improve_p.add_argument("goal_dir")
+    improve_p.add_argument("--config", default=None)
+    improve_p.add_argument("--no-llm-verify", action="store_true")
     args = parser.parse_args(argv)
 
     if args.command == "mutate":
@@ -166,6 +193,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "propertize":
         return _cmd_propertize(args)
+
+    if args.command == "improve":
+        return _cmd_improve(args)
 
     goal_dir = Path(args.goal_dir)
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
