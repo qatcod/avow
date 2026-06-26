@@ -35,7 +35,7 @@ EXISTING TESTS:
 """
 
 
-def propose_ideas(goal: str, current_tests: str, client, model: str, n: int):
+def propose_ideas(goal: str, current_tests: str, client, model: str, n: int) -> tuple[list[Idea], int, int]:
     if n <= 0 or client is None:
         return [], 0, 0
     response = client.messages.parse(
@@ -53,7 +53,7 @@ def propose_ideas(goal: str, current_tests: str, client, model: str, n: int):
     )
 
 
-def select_idea(ideas, escalate):
+def select_idea(ideas, escalate) -> tuple[Idea | None, bool]:
     if not ideas:
         return None, False
     top = ideas[0]
