@@ -30,7 +30,7 @@ GOAL:
 """
 
 
-def generate_property_tests(goal: str, client, model: str, n: int):
+def generate_property_tests(goal: str, client, model: str, n: int) -> tuple[list[TestFile], int, int]:
     if n <= 0 or client is None:
         return [], 0, 0
     response = client.messages.parse(

@@ -204,7 +204,7 @@ MODULE:
 """
 
 
-def llm_mutants(source: str, goal: str, client, model: str, n: int):
+def llm_mutants(source: str, goal: str, client, model: str, n: int) -> tuple[list[Mutant], int, int]:
     if n <= 0 or client is None:
         return [], 0, 0
     response = client.messages.parse(

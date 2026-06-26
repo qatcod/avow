@@ -22,7 +22,7 @@ TEST SUITE:
 """
 
 
-def back_translate(test_sources: str, client, model: str):
+def back_translate(test_sources: str, client, model: str) -> tuple[str, int, int]:
     response = client.messages.parse(
         model=model,
         max_tokens=2000,
@@ -58,7 +58,7 @@ INFERRED-FROM-TESTS GOAL:
 """
 
 
-def judge_intent_match(original_goal: str, inferred_goal: str, client, model: str):
+def judge_intent_match(original_goal: str, inferred_goal: str, client, model: str) -> tuple[IntentMatch, int, int]:
     response = client.messages.parse(
         model=model,
         max_tokens=2000,
