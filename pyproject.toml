@@ -5,6 +5,7 @@ description = "Autonomous build-and-improve loop"
 requires-python = ">=3.11"
 dependencies = [
     "anthropic>=0.69",
+    "hypothesis>=6.0",
     "pydantic>=2.6",
     "pyyaml>=6.0",
 ]

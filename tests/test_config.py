@@ -24,6 +24,9 @@ def test_defaults_are_sane():
     assert cfg.confidence_weights == {"holdout": 1.0, "mutation": 1.0, "intent": 1.0}
     assert cfg.confidence_gating is True
     assert cfg.holdout_floor == 0.5
+    assert cfg.property_tests_enabled is True
+    assert cfg.property_model == "claude-opus-4-8"
+    assert cfg.property_tests_n == 4
 
 
 def test_from_yaml_overrides_then_falls_back(tmp_path: Path):
