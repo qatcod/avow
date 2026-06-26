@@ -42,11 +42,14 @@ The builder drives the [`claude`](https://claude.com/claude-code) CLI (uses its 
 
 ```bash
 forge solve <goal-dir>                       # the full loop: build → verify → confidence
+forge improve <goal-dir>                     # self-improvement: converge, then propose & build the next feature, repeat
 forge mutate <solution-dir> <tests-dir>      # suite-strength score for any code (offline AST by default; --llm adds cross-model mutants)
 forge intent-check <goal.md> <tests-dir>     # does this suite actually test this goal?
 forge propertize <goal.md> <out-dir>         # generate Hypothesis property tests for a goal
 forge verify <solution> <tests> <goal.md>    # one calibrated confidence number for any artifact
 ```
+
+`forge improve` runs the two-phase loop: converge on the goal, then an **Ideator** proposes the next feature (each with a verifier and a risk label), a **leash** auto-pursues objective low-risk ideas (and escalates the rest), the chosen idea's test joins the suite, and the loop re-converges — bounded by a round cap.
 
 A goal directory holds a `goal.md` (and, optionally, a `forge.yaml` to tune budgets/weights). `forge solve` writes the suite, runs the loop, and reports the verdict plus the confidence breakdown.
 
@@ -73,4 +76,4 @@ Architecture and per-feature specs/plans live in `docs/specs/` and `docs/plans/`
 
 ## Status
 
-Built and internally verified (loop, mutation, back-translation/intent, confidence aggregation with hold-out floor, property generation). The core loop is proven end-to-end against live Claude. Roadmap: cross-model judgment panel, learned signal weights, reference-oracle differential testing.
+Built and internally verified: the converge loop, mutation testing, back-translation/intent with a cross-model judgment panel (consensus + agreement floor), confidence aggregation with a hold-out floor, property generation, and the self-improvement *expand phase* (`forge improve`). The core loop is proven end-to-end against live Claude. Roadmap: the Supervisor (event-triggered trajectory guardian), true cross-provider panels, learned signal weights, reference-oracle differential testing.

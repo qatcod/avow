@@ -61,13 +61,6 @@ def test_improve_without_ideator_reduces_to_solve(tmp_path: Path):
 
 
 def test_improve_preserves_last_known_good_on_failed_round(tmp_path):
-    from forge.examiner import ExaminerResult, TestSuite, TestFile
-    from forge.ideator import _IdeaSet, Idea
-    from forge.builder import BuilderOutcome
-    from forge.config import RunConfig
-    from forge.improve import improve
-    from types import SimpleNamespace
-
     (tmp_path / "goal.md").write_text("Build add(a, b) returning a + b.")
 
     class FailingIdeaExaminer:
