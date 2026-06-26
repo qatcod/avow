@@ -51,3 +51,14 @@ def propose_ideas(goal: str, current_tests: str, client, model: str, n: int):
         getattr(usage, "input_tokens", 0),
         getattr(usage, "output_tokens", 0),
     )
+
+
+def select_idea(ideas, escalate):
+    if not ideas:
+        return None, False
+    top = ideas[0]
+    if top.objective and top.risk == "low":
+        return top, False
+    if escalate is not None and escalate(top):
+        return top, True
+    return None, True
