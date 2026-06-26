@@ -55,6 +55,44 @@ def _cmd_intent_check(args) -> int:
     return 0
 
 
+def _cmd_verify(args) -> int:
+    import anthropic
+    from forge.mutation import run_mutation_testing
+    from forge.backtranslation import run_intent_check
+    from forge.confidence import aggregate_confidence
+
+    config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
+    client = anthropic.Anthropic()
+    goal = Path(args.goal_file).read_text(encoding="utf-8")
+
+    mr = run_mutation_testing(
+        Path(args.solution_dir), Path(args.tests_dir), config.test_command,
+        max_ast_mutants=config.max_ast_mutants,
+        llm_n=(config.llm_mutants_n if args.llm else 0),
+        timeout=config.test_timeout_seconds,
+        client=(client if args.llm else None), model=config.mutation_model, goal=goal,
+    )
+    ir = run_intent_check(goal, Path(args.tests_dir), client, config.backtranslation_model)
+
+    mutation_signal = mr.score if mr.baseline_green else None
+    conf = aggregate_confidence(
+        {"mutation": mutation_signal, "intent": ir.score}, config.confidence_weights)
+
+    if not mr.baseline_green:
+        print("warning: suite is not green on the unmutated solution — mutation signal omitted")
+    print(f"confidence: {conf.score:.2f}")
+    print("breakdown:")
+    for k, v in conf.breakdown.items():
+        print(f"  {k}: {v:.2f}  (weight {conf.weights_used[k]:.2f})")
+    print(f"\nmutation: {mr.killed}/{mr.total} killed, {mr.survived} survivors")
+    print(f"intent inferred goal: {ir.inferred_goal}")
+    if ir.divergences:
+        print("intent divergences:")
+        for d in ir.divergences:
+            print(f"  - {d}")
+    return 0
+
+
 def build_examiner(config: RunConfig) -> Examiner:
     import anthropic  # imported lazily so unit tests don't need network/creds
     return Examiner(anthropic.Anthropic(), model=config.examiner_model)
@@ -81,6 +119,13 @@ def main(argv: list[str] | None = None) -> int:
     ic_p.add_argument("goal_file")
     ic_p.add_argument("tests_dir")
     ic_p.add_argument("--config", default=None)
+    ver_p = sub.add_parser("verify",
+                           help="run all verifiers on an artifact and report a calibrated confidence")
+    ver_p.add_argument("solution_dir")
+    ver_p.add_argument("tests_dir")
+    ver_p.add_argument("goal_file")
+    ver_p.add_argument("--config", default=None)
+    ver_p.add_argument("--llm", action="store_true", help="also use cross-model LLM mutants")
     args = parser.parse_args(argv)
 
     if args.command == "mutate":
@@ -88,6 +133,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "intent-check":
         return _cmd_intent_check(args)
+
+    if args.command == "verify":
+        return _cmd_verify(args)
 
     goal_dir = Path(args.goal_dir)
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
