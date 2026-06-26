@@ -27,6 +27,9 @@ def test_defaults_are_sane():
     assert cfg.property_tests_enabled is True
     assert cfg.property_model == "claude-opus-4-8"
     assert cfg.property_tests_n == 4
+    assert cfg.panel_models == ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5"]
+    assert cfg.panel_enabled is True
+    assert cfg.panel_agreement_floor == 0.5
 
 
 def test_from_yaml_overrides_then_falls_back(tmp_path: Path):

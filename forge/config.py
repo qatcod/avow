@@ -28,6 +28,10 @@ class RunConfig(BaseModel):
         default_factory=lambda: {"holdout": 1.0, "mutation": 1.0, "intent": 1.0})
     confidence_gating: bool = True
     holdout_floor: float = 0.5
+    panel_models: list[str] = Field(
+        default_factory=lambda: ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5"])
+    panel_enabled: bool = True
+    panel_agreement_floor: float = 0.5
     property_tests_enabled: bool = True
     property_model: str = "claude-opus-4-8"
     property_tests_n: int = 4
