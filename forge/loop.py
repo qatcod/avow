@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from forge.budget import Budget
@@ -13,6 +13,7 @@ from forge.backtranslation import run_intent_check
 from forge.mutation import run_mutation_testing
 from forge.runner import Runner
 from forge.workspace import Workspace
+from forge.confidence import aggregate_confidence
 
 
 @dataclass
@@ -25,6 +26,8 @@ class SolveResult:
     mutation_score: float | None = None
     survivors: int = 0
     intent_score: float | None = None
+    confidence: float | None = None
+    confidence_breakdown: dict = field(default_factory=dict)
 
 
 def _write_tests(dest: Path, tests: list[TestFile]) -> None:
@@ -47,6 +50,7 @@ def solve(
     confirm=None,
     mutation_client=None,
     intent_client=None,
+    escalate=None,
 ) -> SolveResult:
     goal_dir = Path(goal_dir)
     goal = (goal_dir / "goal.md").read_text()
@@ -130,27 +134,48 @@ def solve(
             rounds_without_improvement += 1
 
         if result.is_green:
-            if _holdout_green(holdout, best_dir, config):
-                mscore: float | None = None
-                surv = 0
-                if config.mutation_enabled:
-                    before = budget.spent_usd
-                    mr = run_mutation_testing(
-                        best_dir, frozen, config.test_command,
-                        max_ast_mutants=config.max_ast_mutants,
-                        llm_n=(config.llm_mutants_n if mutation_client is not None else 0),
-                        timeout=config.test_timeout_seconds,
-                        client=mutation_client, model=config.mutation_model, goal=goal,
-                    )
-                    budget.charge_tokens(config.mutation_model, mr.llm_input_tokens, mr.llm_output_tokens)
-                    mscore, surv = mr.score, mr.survived
-                    log.record(AttemptRecord(
-                        iteration=budget.iterations, score=result.score, is_green=True,
-                        diff_summary=f"mutation {mscore:.2f} ({mr.killed}/{mr.total}), {surv} survivors",
-                        failing=[], plan="mutation testing", cost_usd=budget.spent_usd - before,
-                    ))
-                return SolveResult(True, best_score, budget.iterations, "green", best_dir, mscore, surv, intent_score=intent_score)
-            return SolveResult(False, best_score, budget.iterations, "overfit_on_holdout", best_dir, intent_score=intent_score)
+            holdout_score = _holdout_score(holdout, best_dir, config)
+            mscore: float | None = None
+            surv = 0
+            mut_cost = 0.0
+            if config.mutation_enabled:
+                before = budget.spent_usd
+                mr = run_mutation_testing(
+                    best_dir, frozen, config.test_command,
+                    max_ast_mutants=config.max_ast_mutants,
+                    llm_n=(config.llm_mutants_n if mutation_client is not None else 0),
+                    timeout=config.test_timeout_seconds,
+                    client=mutation_client, model=config.mutation_model, goal=goal,
+                )
+                budget.charge_tokens(config.mutation_model, mr.llm_input_tokens, mr.llm_output_tokens)
+                mut_cost = budget.spent_usd - before
+                mscore, surv = mr.score, mr.survived
+
+            conf = aggregate_confidence(
+                {"holdout": holdout_score, "mutation": mscore, "intent": intent_score},
+                config.confidence_weights,
+            )
+            confidence = conf.score if conf.breakdown else None
+            breakdown = conf.breakdown
+            log.record(AttemptRecord(
+                iteration=budget.iterations, score=result.score, is_green=True,
+                diff_summary=f"confidence {confidence}; mutation {mscore}; {breakdown}",
+                failing=[], plan="confidence", cost_usd=mut_cost,
+            ))
+
+            gated = (config.confidence_gating and confidence is not None
+                     and confidence < config.confidence_threshold)
+            if not gated:
+                return SolveResult(True, best_score, budget.iterations, "green", best_dir,
+                                   mscore, surv, intent_score=intent_score,
+                                   confidence=confidence, confidence_breakdown=breakdown)
+            if escalate is not None and escalate(breakdown):
+                return SolveResult(True, best_score, budget.iterations, "green_human_override", best_dir,
+                                   mscore, surv, intent_score=intent_score,
+                                   confidence=confidence, confidence_breakdown=breakdown)
+            return SolveResult(False, best_score, budget.iterations, "low_confidence", best_dir,
+                               mscore, surv, intent_score=intent_score,
+                               confidence=confidence, confidence_breakdown=breakdown)
 
         if rounds_without_improvement >= config.plateau_patience:
             reason = "plateau"
@@ -165,7 +190,8 @@ def solve(
     )
 
 
-def _holdout_green(holdout: Path, best_dir: Path, config: RunConfig) -> bool:
+def _holdout_score(holdout: Path, best_dir: Path, config: RunConfig) -> float:
     if not holdout.exists() or not any(holdout.iterdir()):
-        return True  # no holdout configured → visible-green is the verdict
-    return Runner(best_dir, holdout, config.test_command, timeout=config.test_timeout_seconds).run().is_green
+        return 1.0  # no hold-out configured → no overfit evidence → full signal
+    return Runner(best_dir, holdout, config.test_command,
+                  timeout=config.test_timeout_seconds).run().score

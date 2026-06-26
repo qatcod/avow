@@ -1,4 +1,5 @@
 # tests/test_loop.py
+import pytest
 from pathlib import Path
 from forge.loop import solve, SolveResult
 from forge.config import RunConfig
@@ -114,3 +115,59 @@ def test_loop_intent_score_none_without_client(tmp_path):
     result = solve(_goal(tmp_path), cfg, StubExaminer(), FlakyBuilder(), now=lambda: 0.0)
     assert result.success is True
     assert result.intent_score is None  # no intent_client → hook skipped
+
+
+def _fake_intent_client(score):
+    from types import SimpleNamespace
+    from forge.backtranslation import _InferredGoal, IntentMatch
+
+    class FakeIntentClient:
+        @property
+        def messages(self):
+            return self
+
+        def parse(self, *, output_format, **kwargs):
+            if output_format is _InferredGoal:
+                po = _InferredGoal(inferred_goal="add two numbers")
+            else:
+                po = IntentMatch(score=score, divergences=[])
+            return SimpleNamespace(parsed_output=po, usage=SimpleNamespace(input_tokens=1, output_tokens=1))
+
+    return FakeIntentClient()
+
+
+def test_loop_high_confidence_succeeds(tmp_path):
+    cfg = RunConfig(max_iterations=5, holdout_fraction=0.0)
+    r = solve(_goal(tmp_path), cfg, StubExaminer(), FlakyBuilder(), now=lambda: 0.0,
+              intent_client=_fake_intent_client(0.9))
+    # mutation 1.0, holdout 1.0, intent 0.9 -> 0.9667 >= 0.7
+    assert r.success is True and r.reason == "green"
+    assert r.confidence == pytest.approx((1.0 + 1.0 + 0.9) / 3)
+    assert set(r.confidence_breakdown) == {"holdout", "mutation", "intent"}
+
+
+def test_loop_low_confidence_flags(tmp_path):
+    cfg = RunConfig(max_iterations=5, holdout_fraction=0.0)
+    r = solve(_goal(tmp_path), cfg, StubExaminer(), FlakyBuilder(), now=lambda: 0.0,
+              intent_client=_fake_intent_client(0.0))
+    # (1 + 1 + 0) / 3 = 0.667 < 0.7
+    assert r.success is False and r.reason == "low_confidence"
+    assert r.confidence == pytest.approx((1.0 + 1.0 + 0.0) / 3)
+
+
+def test_loop_low_confidence_escalation_override(tmp_path):
+    cfg = RunConfig(max_iterations=5, holdout_fraction=0.0)
+    calls = []
+    r = solve(_goal(tmp_path), cfg, StubExaminer(), FlakyBuilder(), now=lambda: 0.0,
+              intent_client=_fake_intent_client(0.0),
+              escalate=lambda breakdown: calls.append(breakdown) or True)
+    assert r.success is True and r.reason == "green_human_override"
+    assert calls and set(calls[0]) == {"holdout", "mutation", "intent"}
+
+
+def test_loop_gating_off_reports_only(tmp_path):
+    cfg = RunConfig(max_iterations=5, holdout_fraction=0.0, confidence_gating=False)
+    r = solve(_goal(tmp_path), cfg, StubExaminer(), FlakyBuilder(), now=lambda: 0.0,
+              intent_client=_fake_intent_client(0.0))
+    assert r.success is True and r.reason == "green"  # low confidence, but not gated
+    assert r.confidence == pytest.approx((1.0 + 1.0 + 0.0) / 3)
