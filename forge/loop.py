@@ -74,13 +74,15 @@ def solve(
         if confirm is not None and not confirm(ex.suite.test_plan):
             return SolveResult(False, 0.0, 0, "aborted", None)
         if config.intent_check_enabled and intent_client is not None:
+            before = budget.spent_usd
             ir = run_intent_check(goal, frozen, intent_client, config.backtranslation_model)
             budget.charge_tokens(config.backtranslation_model, ir.input_tokens, ir.output_tokens)
             intent_score = ir.score
             RunLog(forge_dir / "run.jsonl").record(AttemptRecord(
                 iteration=0, score=0.0, is_green=False,
                 diff_summary=f"intent match {ir.score:.2f}; {len(ir.divergences)} divergences",
-                failing=[], plan="intent check", cost_usd=0.0,
+                failing=ir.divergences, plan="intent check: " + ir.inferred_goal[:160],
+                cost_usd=budget.spent_usd - before,
             ))
 
     log = RunLog(forge_dir / "run.jsonl")
