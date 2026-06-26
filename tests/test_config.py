@@ -14,6 +14,10 @@ def test_defaults_are_sane():
     assert cfg.holdout_fraction == 0.25
     assert cfg.builder_timeout_seconds == 600
     assert cfg.test_timeout_seconds == 120
+    assert cfg.max_ast_mutants == 50
+    assert cfg.llm_mutants_n == 3
+    assert cfg.mutation_model == "claude-sonnet-4-6"
+    assert cfg.mutation_enabled is True
 
 
 def test_from_yaml_overrides_then_falls_back(tmp_path: Path):

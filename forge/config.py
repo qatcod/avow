@@ -17,6 +17,10 @@ class RunConfig(BaseModel):
     holdout_fraction: float = 0.25
     builder_timeout_seconds: int = 600
     test_timeout_seconds: int = 120
+    max_ast_mutants: int = 50
+    llm_mutants_n: int = 3
+    mutation_model: str = "claude-sonnet-4-6"
+    mutation_enabled: bool = True
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "RunConfig":
