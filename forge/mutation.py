@@ -137,8 +137,14 @@ def run_mutation_testing(
             pool.append((mod.name, m))
     pool = pool[:max_ast_mutants]
 
-    # llm_n / client / model / goal are wired in Task 4 (hybrid).
     llm_input = llm_output = 0
+    if llm_n and client is not None:
+        for mod in modules:
+            ms, i_tok, o_tok = llm_mutants(mod.read_text(encoding="utf-8"), goal, client, model, llm_n)
+            llm_input += i_tok
+            llm_output += o_tok
+            for m in ms:
+                pool.append((mod.name, m))
 
     killed = 0
     survivors: list[Survivor] = []
