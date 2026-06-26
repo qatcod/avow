@@ -7,6 +7,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from pydantic import BaseModel
+
 from forge.runner import Runner
 
 
@@ -154,3 +156,44 @@ def run_mutation_testing(
     total = len(pool)
     score = 1.0 if total == 0 else killed / total
     return MutationResult(total, killed, total - killed, score, survivors, llm_input, llm_output)
+
+
+class _MutantSpec(BaseModel):
+    description: str
+    source: str
+
+
+class _MutantList(BaseModel):
+    mutants: list[_MutantSpec]
+
+
+_LLM_PROMPT = """\
+You are a mutation-testing engine. Produce exactly {n} variants of the module below, \
+each introducing ONE realistic bug — a plausible mistake a developer might make \
+(off-by-one, wrong operator, swapped argument, missed edge case) — NOT a syntax error. \
+Each variant must be the COMPLETE module source with the single bug applied. A correct, \
+rigorous test suite should FAIL on each variant.
+
+The module implements this goal:
+{goal}
+
+MODULE:
+{source}
+"""
+
+
+def llm_mutants(source: str, goal: str, client, model: str, n: int):
+    if n <= 0 or client is None:
+        return [], 0, 0
+    response = client.messages.parse(
+        model=model,
+        max_tokens=8000,
+        messages=[{"role": "user", "content": _LLM_PROMPT.format(n=n, goal=goal, source=source)}],
+        output_format=_MutantList,
+    )
+    usage = response.usage
+    mutants = [
+        Mutant(source=s.source, description=f"LLM: {s.description}", origin="llm")
+        for s in response.parsed_output.mutants[:n]
+    ]
+    return mutants, getattr(usage, "input_tokens", 0), getattr(usage, "output_tokens", 0)
