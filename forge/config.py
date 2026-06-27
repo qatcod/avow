@@ -38,6 +38,7 @@ class RunConfig(BaseModel):
     oracle_enabled: bool = True
     oracle_model: str = "claude-opus-4-8"
     oracle_floor: float = 1.0
+    adversarial_rounds: int = 2
     property_tests_enabled: bool = True
     property_model: str = "claude-opus-4-8"
     property_tests_n: int = 4
