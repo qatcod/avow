@@ -21,7 +21,7 @@ def test_defaults_are_sane():
     assert cfg.backtranslation_model == "claude-opus-4-8"
     assert cfg.intent_check_enabled is True
     assert cfg.confidence_threshold == 0.7
-    assert cfg.confidence_weights == {"holdout": 1.0, "mutation": 1.0, "intent": 1.0}
+    assert cfg.confidence_weights == {"holdout": 1.0, "mutation": 1.0, "intent": 1.0, "oracle": 1.0}
     assert cfg.confidence_gating is True
     assert cfg.holdout_floor == 0.5
     assert cfg.property_tests_enabled is True
@@ -33,6 +33,10 @@ def test_defaults_are_sane():
     assert cfg.max_expand_rounds == 3
     assert cfg.ideator_model == "claude-opus-4-8"
     assert cfg.ideas_n == 3
+    assert cfg.oracle_enabled is True
+    assert cfg.oracle_model == "claude-opus-4-8"
+    assert cfg.oracle_floor == 1.0
+    assert cfg.confidence_weights["oracle"] == 1.0
 
 
 def test_from_yaml_overrides_then_falls_back(tmp_path: Path):

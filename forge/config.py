@@ -25,7 +25,7 @@ class RunConfig(BaseModel):
     intent_check_enabled: bool = True
     confidence_threshold: float = 0.7
     confidence_weights: dict[str, float] = Field(
-        default_factory=lambda: {"holdout": 1.0, "mutation": 1.0, "intent": 1.0})
+        default_factory=lambda: {"holdout": 1.0, "mutation": 1.0, "intent": 1.0, "oracle": 1.0})
     confidence_gating: bool = True
     holdout_floor: float = 0.5
     panel_models: list[str] = Field(
@@ -35,6 +35,9 @@ class RunConfig(BaseModel):
     max_expand_rounds: int = 3
     ideator_model: str = "claude-opus-4-8"
     ideas_n: int = 3
+    oracle_enabled: bool = True
+    oracle_model: str = "claude-opus-4-8"
+    oracle_floor: float = 1.0
     property_tests_enabled: bool = True
     property_model: str = "claude-opus-4-8"
     property_tests_n: int = 4
