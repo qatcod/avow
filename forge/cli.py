@@ -146,7 +146,7 @@ def _cmd_oracle(args) -> int:
     print(f"oracle agreement: {res.agreement}")
     if res.counterexample:
         print(f"counterexample:\n{res.counterexample}")
-    return 0
+    return 1 if res.agreement == 0.0 else 0
 
 
 def build_examiner(config: RunConfig) -> Examiner:

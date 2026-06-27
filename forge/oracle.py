@@ -29,7 +29,8 @@ version). It must expose the SAME public function(s) as the goal implies.
 implementation as `from lib import <name> as _sol` and your reference as \
 `from ref import <name> as _ref`, then uses `@given(...)` from `hypothesis` with \
 strategies matching the goal's input types to assert `_sol(x) == _ref(x)` for all inputs. \
-One `@given` test per public function. Do not import anything else from lib/ref.
+One `@given` test per public function. Do not import anything else from lib/ref. \
+If a function can return floats (or contains floats), compare with `math.isclose(a, b, rel_tol=1e-9, abs_tol=1e-12)` (import `math`) instead of `==`, to avoid floating-point false mismatches; use `==` for exact types (ints, strings, lists, etc.).
 
 The two implementations are written independently so that a disagreement reveals a bug in \
 one of them. Make the reference genuinely independent (a different, simpler approach).
@@ -104,7 +105,9 @@ def run_oracle_check(solution_dir, goal, client, model, test_command, timeout: i
         result = parse_report(data)
         if result.errors > 0 or result.total == 0:
             return _inconclusive(in_tok, out_tok)  # broken reference / collection failure
-        if result.failed == 0 and result.passed > 0:
+        if result.failed > 0:
+            cx = result.failures[0].message[:500] if result.failures else ""
+            return OracleResult(0.0, True, cx, True, in_tok, out_tok)
+        if result.passed > 0:
             return OracleResult(1.0, True, "", True, in_tok, out_tok)
-        cx = result.failures[0].message[:500] if result.failures else ""
-        return OracleResult(0.0, True, cx, True, in_tok, out_tok)
+        return _inconclusive(in_tok, out_tok)  # collected but nothing ran (all skipped/xfail)
