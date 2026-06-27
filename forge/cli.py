@@ -171,6 +171,31 @@ def _cmd_harden(args) -> int:
     return 0 if result.success else 2
 
 
+def _cmd_population(args) -> int:
+    from forge.population import population_solve, hybrid_solve
+
+    config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
+    examiner = build_examiner(config)
+    builder = Builder(model=config.builder_model, timeout=config.builder_timeout_seconds)
+
+    verify_client = None
+    if not args.no_llm_verify:
+        import anthropic
+        verify_client = anthropic.Anthropic()
+
+    run = hybrid_solve if args.hybrid else population_solve
+    result = run(Path(args.goal_dir), config, examiner, builder,
+                 intent_client=verify_client, property_client=verify_client,
+                 oracle_client=verify_client)
+
+    print(f"result: success={result.success} winner=candidate {result.winner_index} "
+          f"({len(result.candidates)} candidates)")
+    for c in result.candidates:
+        print(f"  candidate {c.index}: success={c.result.success} reason={c.result.reason} "
+              f"confidence={c.result.confidence}")
+    return 0 if result.success else 2
+
+
 def build_examiner(config: RunConfig) -> Examiner:
     import anthropic  # imported lazily so unit tests don't need network/creds
     return Examiner(anthropic.Anthropic(), model=config.examiner_model)
@@ -226,6 +251,13 @@ def main(argv: list[str] | None = None) -> int:
     harden_p.add_argument("goal_dir")
     harden_p.add_argument("--config", default=None)
     harden_p.add_argument("--no-llm-verify", action="store_true")
+    pop_p = sub.add_parser("population",
+                           help="run N candidate solutions and let the verifier pick the winner")
+    pop_p.add_argument("goal_dir")
+    pop_p.add_argument("--config", default=None)
+    pop_p.add_argument("--no-llm-verify", action="store_true")
+    pop_p.add_argument("--hybrid", action="store_true",
+                       help="run one attempt first; escalate to the population only on failure")
     args = parser.parse_args(argv)
 
     if args.command == "mutate":
@@ -248,6 +280,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "harden":
         return _cmd_harden(args)
+
+    if args.command == "population":
+        return _cmd_population(args)
 
     goal_dir = Path(args.goal_dir)
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
