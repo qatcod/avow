@@ -37,6 +37,7 @@ def test_defaults_are_sane():
     assert cfg.oracle_model == "claude-opus-4-8"
     assert cfg.oracle_floor == 1.0
     assert cfg.adversarial_rounds == 2
+    assert cfg.population_size == 3
     assert cfg.confidence_weights["oracle"] == 1.0
 
 
