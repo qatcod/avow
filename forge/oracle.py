@@ -1,6 +1,15 @@
 from __future__ import annotations
 
+import json
+import shutil
+import subprocess
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+
 from pydantic import BaseModel
+
+from forge.scoring import parse_report
 
 
 class _OraclePair(BaseModel):
@@ -45,3 +54,57 @@ def generate_oracle(goal: str, client, model: str) -> tuple[_OraclePair | None, 
         getattr(usage, "input_tokens", 0),
         getattr(usage, "output_tokens", 0),
     )
+
+
+@dataclass
+class OracleResult:
+    agreement: float | None
+    baseline_ok: bool
+    counterexample: str
+    checked: bool
+    input_tokens: int
+    output_tokens: int
+
+
+def _inconclusive(in_tok, out_tok, *, counterexample="") -> "OracleResult":
+    return OracleResult(agreement=None, baseline_ok=False, counterexample=counterexample,
+                        checked=False, input_tokens=in_tok, output_tokens=out_tok)
+
+
+def run_oracle_check(solution_dir, goal, client, model, test_command, timeout: int = 120) -> OracleResult:
+    pair, in_tok, out_tok = generate_oracle(goal, client, model)
+    if pair is None:
+        return _inconclusive(in_tok, out_tok)
+
+    with tempfile.TemporaryDirectory(prefix="forge-oracle-") as tmp:
+        work = Path(tmp)
+        for p in Path(solution_dir).glob("*.py"):
+            if p.name.startswith("test_") or p.name == "conftest.py":
+                continue
+            shutil.copy2(p, work / p.name)
+        (work / "ref.py").write_text(pair.reference_code, encoding="utf-8")
+        (work / "test_oracle_diff.py").write_text(pair.diff_test_code, encoding="utf-8")
+        report = work / "report.json"
+
+        try:
+            subprocess.run(
+                [*test_command, "--json-report", f"--json-report-file={report}", "test_oracle_diff.py"],
+                cwd=work, capture_output=True, timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            return _inconclusive(in_tok, out_tok, counterexample="timeout")
+
+        if not report.exists():
+            return _inconclusive(in_tok, out_tok)
+        try:
+            data = json.loads(report.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return _inconclusive(in_tok, out_tok)
+
+        result = parse_report(data)
+        if result.errors > 0 or result.total == 0:
+            return _inconclusive(in_tok, out_tok)  # broken reference / collection failure
+        if result.failed == 0 and result.passed > 0:
+            return OracleResult(1.0, True, "", True, in_tok, out_tok)
+        cx = result.failures[0].message[:500] if result.failures else ""
+        return OracleResult(0.0, True, cx, True, in_tok, out_tok)
