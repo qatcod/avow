@@ -135,6 +135,20 @@ def _cmd_improve(args) -> int:
     return 0 if result.success else 2
 
 
+def _cmd_oracle(args) -> int:
+    import anthropic
+    from forge.oracle import run_oracle_check
+
+    config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
+    goal = Path(args.goal_file).read_text(encoding="utf-8")
+    res = run_oracle_check(Path(args.solution_dir), goal, anthropic.Anthropic(),
+                           config.oracle_model, config.test_command, config.test_timeout_seconds)
+    print(f"oracle agreement: {res.agreement}")
+    if res.counterexample:
+        print(f"counterexample:\n{res.counterexample}")
+    return 0
+
+
 def build_examiner(config: RunConfig) -> Examiner:
     import anthropic  # imported lazily so unit tests don't need network/creds
     return Examiner(anthropic.Anthropic(), model=config.examiner_model)
@@ -180,6 +194,11 @@ def main(argv: list[str] | None = None) -> int:
     improve_p.add_argument("goal_dir")
     improve_p.add_argument("--config", default=None)
     improve_p.add_argument("--no-llm-verify", action="store_true")
+    oracle_p = sub.add_parser("oracle",
+                              help="differential-test a solution against an independent reference impl")
+    oracle_p.add_argument("solution_dir")
+    oracle_p.add_argument("goal_file")
+    oracle_p.add_argument("--config", default=None)
     args = parser.parse_args(argv)
 
     if args.command == "mutate":
@@ -196,6 +215,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "improve":
         return _cmd_improve(args)
+
+    if args.command == "oracle":
+        return _cmd_oracle(args)
 
     goal_dir = Path(args.goal_dir)
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
