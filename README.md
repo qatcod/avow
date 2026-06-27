@@ -20,6 +20,7 @@ Most "autonomous coder" demos stop at *the tests pass*. That's the easy 20%. The
 | **Intent** | Do the tests test the *right* goal? | a different model reads the suite *blind*, restates the goal, compare |
 | **Property** | Do invariants hold for *all* inputs? | Hypothesis property/metamorphic tests fuzzed during the build |
 | **Reference oracle** | Does it match an *independent* implementation? | generate a simplest-correct reference; differential-test the solution against it on thousands of fuzzed inputs |
+| **Adversarial escalation** | Can a QA adversary break it? | the Examiner reads the passing solution and writes harder tests targeting its weak spots; the suite battle-hardens over rounds (`forge harden`) |
 
 > Behavioral-green is the precondition (not a confidence input); property tests are folded into the frozen suite (they raise the bar for *green* and *mutation* rather than appearing as a separate number). The aggregated confidence breakdown is **hold-out + mutation + intent + reference-oracle** — each included only when it ran. Hold-out, panel-agreement, and oracle-disagreement each act as a hard floor (a breach forces `low_confidence` regardless of the average).
 
@@ -44,6 +45,7 @@ The builder drives the [`claude`](https://claude.com/claude-code) CLI (uses its 
 ```bash
 forge solve <goal-dir>                       # the full loop: build → verify → confidence
 forge improve <goal-dir>                     # self-improvement: converge, then propose & build the next feature, repeat
+forge harden <goal-dir>                       # converge, then escalate: the Examiner writes harder tests targeting the solution, repeat
 forge mutate <solution-dir> <tests-dir>      # suite-strength score for any code (offline AST by default; --llm adds cross-model mutants)
 forge intent-check <goal.md> <tests-dir>     # does this suite actually test this goal?
 forge propertize <goal.md> <out-dir>         # generate Hypothesis property tests for a goal
@@ -78,4 +80,4 @@ Architecture and per-feature specs/plans live in `docs/specs/` and `docs/plans/`
 
 ## Status
 
-Built and internally verified: the converge loop, mutation testing, back-translation/intent with a cross-model judgment panel (consensus + agreement floor), reference-oracle differential testing, confidence aggregation with hold-out / panel / oracle floors, property generation, and the self-improvement *expand phase* (`forge improve`). The **full moat is proven end-to-end against live Claude** (Examiner-written suite + property fuzzing + the 3-model intent panel + mutation + confidence). Roadmap: the Supervisor (event-triggered trajectory guardian), true cross-provider panels, learned signal weights, the reference as a converge target.
+**All five verification layers of the design are built**: execution-grounded checks (property + reference-oracle), decorrelated judges (cross-model panel + adversarial-escalating Examiner), test-the-tests (mutation + hold-out), intent triangulation (back-translation), and calibrated confidence (aggregation + hold-out/panel/oracle floors) — plus the self-improvement *expand phase* (`forge improve`) and adversarial hardening (`forge harden`). The **full moat is proven end-to-end against live Claude** (Examiner-written suite + property fuzzing + the 3-model intent panel + mutation + confidence). Roadmap: Population/Hybrid search strategies behind the swappable seam, the Supervisor (event-triggered trajectory guardian), true cross-provider panels, learned signal weights.
