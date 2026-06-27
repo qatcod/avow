@@ -16,6 +16,7 @@ from forge.runner import Runner
 from forge.workspace import Workspace
 from forge.confidence import aggregate_confidence
 from forge.properties import generate_property_tests
+from forge.oracle import run_oracle_check
 
 
 @dataclass
@@ -30,6 +31,7 @@ class SolveResult:
     intent_score: float | None = None
     confidence: float | None = None
     confidence_breakdown: dict = field(default_factory=dict)
+    oracle_agreement: float | None = None
 
 
 def _write_tests(dest: Path, tests: list[TestFile]) -> None:
@@ -54,6 +56,7 @@ def solve(
     intent_client=None,
     escalate=None,
     property_client=None,
+    oracle_client=None,
 ) -> SolveResult:
     goal_dir = Path(goal_dir)
     goal = (goal_dir / "goal.md").read_text()
@@ -173,8 +176,22 @@ def solve(
                 mut_cost = budget.spent_usd - before
                 mscore, surv = mr.score, mr.survived
 
+            oracle_agreement: float | None = None
+            if config.oracle_enabled and oracle_client is not None:
+                before = budget.spent_usd
+                orc = run_oracle_check(best_dir, goal, oracle_client, config.oracle_model,
+                                       config.test_command, config.test_timeout_seconds)
+                budget.charge_tokens(config.oracle_model, orc.input_tokens, orc.output_tokens)
+                oracle_agreement = orc.agreement
+                log.record(AttemptRecord(
+                    iteration=budget.iterations, score=result.score, is_green=True,
+                    diff_summary=f"oracle agreement {orc.agreement}; {orc.counterexample[:80]}",
+                    failing=[], plan="oracle", cost_usd=budget.spent_usd - before,
+                ))
+
             conf = aggregate_confidence(
-                {"holdout": holdout_score, "mutation": mscore, "intent": intent_score},
+                {"holdout": holdout_score, "mutation": mscore, "intent": intent_score,
+                 "oracle": oracle_agreement},
                 config.confidence_weights,
             )
             confidence = conf.score if conf.breakdown else None
@@ -188,6 +205,7 @@ def solve(
             floor_breached = config.confidence_gating and (
                 holdout_score < config.holdout_floor
                 or (panel_agreement is not None and panel_agreement < config.panel_agreement_floor)
+                or (oracle_agreement is not None and oracle_agreement < config.oracle_floor)
             )
             gated = floor_breached or (
                 config.confidence_gating and confidence is not None
@@ -195,14 +213,17 @@ def solve(
             if not gated:
                 return SolveResult(True, best_score, budget.iterations, "green", best_dir,
                                    mscore, surv, intent_score=intent_score,
-                                   confidence=confidence, confidence_breakdown=breakdown)
+                                   confidence=confidence, confidence_breakdown=breakdown,
+                                   oracle_agreement=oracle_agreement)
             if escalate is not None and escalate(breakdown):
                 return SolveResult(True, best_score, budget.iterations, "green_human_override", best_dir,
                                    mscore, surv, intent_score=intent_score,
-                                   confidence=confidence, confidence_breakdown=breakdown)
+                                   confidence=confidence, confidence_breakdown=breakdown,
+                                   oracle_agreement=oracle_agreement)
             return SolveResult(False, best_score, budget.iterations, "low_confidence", best_dir,
                                mscore, surv, intent_score=intent_score,
-                               confidence=confidence, confidence_breakdown=breakdown)
+                               confidence=confidence, confidence_breakdown=breakdown,
+                               oracle_agreement=oracle_agreement)
 
         if rounds_without_improvement >= config.plateau_patience:
             reason = "plateau"

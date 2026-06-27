@@ -236,6 +236,40 @@ def test_loop_panel_disagreement_floor(tmp_path):
     assert r.intent_score == pytest.approx((1.0 + 1.0 + 0.2) / 3)
 
 
+def test_loop_oracle_disagreement_floor(tmp_path):
+    from types import SimpleNamespace
+    from forge.oracle import _OraclePair
+
+    class DisagreeingOracle:
+        @property
+        def messages(self):
+            return self
+
+        def parse(self, **kwargs):
+            # reference DISAGREES with the converged solution (add = a + b): reference uses a - b
+            pair = _OraclePair(
+                reference_code="def add(a, b):\n    return a - b\n",
+                diff_test_code=("from lib import add as _sol\nfrom ref import add as _ref\n"
+                                "from hypothesis import given, strategies as st\n"
+                                "@given(st.integers(), st.integers())\n"
+                                "def test_diff(a, b):\n    assert _sol(a, b) == _ref(a, b)\n"))
+            return SimpleNamespace(parsed_output=pair, usage=SimpleNamespace(input_tokens=1, output_tokens=1))
+
+    cfg = RunConfig(max_iterations=5, holdout_fraction=0.0)
+    r = solve(_goal(tmp_path), cfg, StubExaminer(), FlakyBuilder(), now=lambda: 0.0,
+              oracle_client=DisagreeingOracle())
+    # the solution converges green, but the independent reference disagrees (a+b vs a-b) ->
+    # oracle agreement 0.0 < floor 1.0 -> forced low_confidence
+    assert r.reason == "low_confidence" and r.success is False
+    assert r.oracle_agreement == 0.0
+
+
+def test_loop_no_oracle_client_unaffected(tmp_path):
+    cfg = RunConfig(max_iterations=5, holdout_fraction=0.0)
+    r = solve(_goal(tmp_path), cfg, StubExaminer(), FlakyBuilder(), now=lambda: 0.0)
+    assert r.success is True and r.oracle_agreement is None
+
+
 def test_loop_holdout_floor_vetoes_high_average(tmp_path):
     class FloorExaminer(Examiner):
         def __init__(self):
