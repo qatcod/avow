@@ -19,8 +19,9 @@ Most "autonomous coder" demos stop at *the tests pass*. That's the easy 20%. The
 | **Mutation** | Are the tests rigorous enough to catch bugs? | inject mutants, measure the kill rate |
 | **Intent** | Do the tests test the *right* goal? | a different model reads the suite *blind*, restates the goal, compare |
 | **Property** | Do invariants hold for *all* inputs? | Hypothesis property/metamorphic tests fuzzed during the build |
+| **Reference oracle** | Does it match an *independent* implementation? | generate a simplest-correct reference; differential-test the solution against it on thousands of fuzzed inputs |
 
-> Behavioral-green is the precondition (not a confidence input); property tests are folded into the frozen suite (they raise the bar for *green* and *mutation* rather than appearing as a separate number). The aggregated confidence breakdown is **hold-out + mutation + intent**.
+> Behavioral-green is the precondition (not a confidence input); property tests are folded into the frozen suite (they raise the bar for *green* and *mutation* rather than appearing as a separate number). The aggregated confidence breakdown is **hold-out + mutation + intent + reference-oracle** — each included only when it ran. Hold-out, panel-agreement, and oracle-disagreement each act as a hard floor (a breach forces `low_confidence` regardless of the average).
 
 These combine into a **calibrated confidence** with a transparent per-signal breakdown. `done = green ∧ confidence ≥ threshold`; below it, the run is flagged `low_confidence` or escalated to a human.
 
@@ -46,6 +47,7 @@ forge improve <goal-dir>                     # self-improvement: converge, then 
 forge mutate <solution-dir> <tests-dir>      # suite-strength score for any code (offline AST by default; --llm adds cross-model mutants)
 forge intent-check <goal.md> <tests-dir>     # does this suite actually test this goal?
 forge propertize <goal.md> <out-dir>         # generate Hypothesis property tests for a goal
+forge oracle <solution-dir> <goal.md>        # differential-test a solution against an independent reference impl
 forge verify <solution> <tests> <goal.md>    # one calibrated confidence number for any artifact
 ```
 
@@ -76,4 +78,4 @@ Architecture and per-feature specs/plans live in `docs/specs/` and `docs/plans/`
 
 ## Status
 
-Built and internally verified: the converge loop, mutation testing, back-translation/intent with a cross-model judgment panel (consensus + agreement floor), confidence aggregation with a hold-out floor, property generation, and the self-improvement *expand phase* (`forge improve`). The core loop is proven end-to-end against live Claude. Roadmap: the Supervisor (event-triggered trajectory guardian), true cross-provider panels, learned signal weights, reference-oracle differential testing.
+Built and internally verified: the converge loop, mutation testing, back-translation/intent with a cross-model judgment panel (consensus + agreement floor), reference-oracle differential testing, confidence aggregation with hold-out / panel / oracle floors, property generation, and the self-improvement *expand phase* (`forge improve`). The **full moat is proven end-to-end against live Claude** (Examiner-written suite + property fuzzing + the 3-model intent panel + mutation + confidence). Roadmap: the Supervisor (event-triggered trajectory guardian), true cross-provider panels, learned signal weights, the reference as a converge target.
