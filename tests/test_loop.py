@@ -337,3 +337,37 @@ def test_loop_supervisor_dormant_by_default(tmp_path):
     cfg = RunConfig(max_iterations=6, holdout_fraction=0.0, plateau_patience=2)  # supervisor off
     r = solve(_goal(tmp_path), cfg, StubExaminer(), AlwaysWrongBuilder(), now=lambda: 0.0)
     assert r.reason == "plateau"   # no supervisor_client + disabled -> unchanged behavior
+
+
+def test_loop_oracle_converge_target(tmp_path):
+    from types import SimpleNamespace
+    from forge.oracle import _OraclePair
+
+    class FakeOracle:
+        @property
+        def messages(self):
+            return self
+
+        def parse(self, **kwargs):
+            pair = _OraclePair(
+                reference_code="def add(a, b):\n    return a + b\n",
+                diff_test_code=("from lib import add as _sol\nfrom ref import add as _ref\n"
+                                "from hypothesis import given, strategies as st\n"
+                                "@given(st.integers(), st.integers())\n"
+                                "def test_conv(a, b):\n    assert _sol(a, b) == _ref(a, b)\n"))
+            return SimpleNamespace(parsed_output=pair, usage=SimpleNamespace(input_tokens=1, output_tokens=1))
+
+    cfg = RunConfig(max_iterations=5, holdout_fraction=0.0, oracle_converge_target=True)
+    r = solve(_goal(tmp_path), cfg, StubExaminer(), FlakyBuilder(), now=lambda: 0.0,
+              oracle_client=FakeOracle())
+    # the converged solution (a + b) passes the Examiner test AND agrees with the reference (a + b)
+    assert r.success is True and r.reason == "green"
+    assert (tmp_path / "tests_frozen" / "test_oracle_converge.py").exists()
+    assert (tmp_path / "tests_frozen" / "ref.py").exists()
+
+
+def test_loop_oracle_converge_target_off_by_default(tmp_path):
+    cfg = RunConfig(max_iterations=5, holdout_fraction=0.0)  # oracle_converge_target defaults False
+    r = solve(_goal(tmp_path), cfg, StubExaminer(), FlakyBuilder(), now=lambda: 0.0)
+    assert r.success is True
+    assert not (tmp_path / "tests_frozen" / "ref.py").exists()

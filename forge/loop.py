@@ -16,7 +16,7 @@ from forge.runner import Runner
 from forge.workspace import Workspace
 from forge.confidence import aggregate_confidence
 from forge.properties import generate_property_tests
-from forge.oracle import run_oracle_check
+from forge.oracle import run_oracle_check, generate_oracle
 from forge.supervisor import review_trajectory
 
 
@@ -87,8 +87,17 @@ def solve(
                 goal, property_client, config.property_model, config.property_tests_n)
             budget.charge_tokens(config.property_model, p_in, p_out)
             visible = visible + props
+        oracle_ref_code = None
+        if config.oracle_converge_target and oracle_client is not None:
+            pair, o_in, o_out = generate_oracle(goal, oracle_client, config.oracle_model)
+            budget.charge_tokens(config.oracle_model, o_in, o_out)
+            if pair is not None:
+                visible = visible + [TestFile(path="test_oracle_converge.py", content=pair.diff_test_code)]
+                oracle_ref_code = pair.reference_code
         _write_tests(frozen, visible)
         _write_tests(holdout, held)
+        if oracle_ref_code is not None:
+            (frozen / "ref.py").write_text(oracle_ref_code, encoding="utf-8")
         if confirm is not None and not confirm(ex.suite.test_plan):
             return SolveResult(False, 0.0, 0, "aborted", None)
         if config.intent_check_enabled and intent_client is not None:
