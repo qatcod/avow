@@ -30,7 +30,8 @@ When `max_parallel_candidates == 1` (or only one pool candidate), behavior is ex
 ## Honest framing & limitations
 
 - **Live resource/rate-limit pressure:** N concurrent candidates means N concurrent `claude -p` sessions + pytest runs. `max_parallel_candidates` (default 4) caps it; set it to `1` for the old sequential behavior on constrained machines or tight rate limits.
-- **Per-candidate budget still applies** (each `solve()` keeps its own caps); there is still no shared global budget across candidates — concurrency doesn't change the budgeting model, only the wall-clock.
+- **Per-candidate budget still applies** (each `solve()` keeps its own caps); there is still no shared global budget across candidates. Concurrency doesn't change the budgeting *model*, but it does interact with the *wall-clock* budget: under N saturating candidates a single candidate may hit `max_wall_seconds` at fewer iterations than it would run sequentially, so a candidate's *content* can differ from a sequential run (selection stays deterministic given the results; the per-candidate work can be shorter under load).
+- **A crashed candidate records why:** a worker exception is captured into the failed candidate's `reason` (`"candidate_error: <exc>"`) so a live crash is debuggable, not silently swallowed.
 - **Thread-safety scope:** safe *because* each candidate writes only into its own disjoint directory and `solve()`/`Runner` use per-call `TemporaryDirectory`s. This relies on no candidate touching another's paths (true by construction here). Candidate 0 is deliberately NOT parallelized — it must finish writing the shared suite before any pool candidate copies it.
 - Exceptions in a worker propagate as a failed candidate; `_run_candidate_pool` must not let one candidate's crash abort the others (collect per-candidate, tolerate a `None`/failed result, and let `select_best` ignore it).
 
