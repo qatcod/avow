@@ -63,3 +63,49 @@ def test_hybrid_escalates_on_failure(tmp_path):
     cfg = RunConfig(max_iterations=3, holdout_fraction=0.0, population_size=2)
     r = hybrid_solve(_goal(tmp_path), cfg, StubExaminer(), BadBuilder(), now=lambda: 0.0)
     assert r.success is False and len(r.candidates) == 2   # first failed -> escalated to the pool
+
+
+def test_population_parallel_outcome_matches(tmp_path):
+    cfg = RunConfig(max_iterations=5, holdout_fraction=0.0, population_size=3, max_parallel_candidates=4)
+    r = population_solve(_goal(tmp_path), cfg, StubExaminer(), GoodBuilder(), now=lambda: 0.0)
+    assert r.success is True
+    assert len(r.candidates) == 3
+    assert [c.index for c in r.candidates] == [0, 1, 2]   # index order preserved (deterministic)
+    assert (tmp_path / ".forge" / "best" / "lib.py").exists()
+    assert (tmp_path / ".forge" / "candidates" / "1" / "tests_frozen").exists()
+    assert (tmp_path / ".forge" / "candidates" / "2" / "tests_frozen").exists()
+
+
+def test_population_sequential_when_max_parallel_one(tmp_path):
+    cfg = RunConfig(max_iterations=5, holdout_fraction=0.0, population_size=2, max_parallel_candidates=1)
+    r = population_solve(_goal(tmp_path), cfg, StubExaminer(), GoodBuilder(), now=lambda: 0.0)
+    assert r.success is True and len(r.candidates) == 2 and [c.index for c in r.candidates] == [0, 1]
+
+
+def test_pool_tolerates_a_failing_candidate(tmp_path):
+    from types import SimpleNamespace
+    from forge.population import _run_candidate_pool, Candidate
+
+    (tmp_path / "goal.md").write_text("Build add(a, b).")
+    (tmp_path / "tests_frozen").mkdir()
+    (tmp_path / "tests_frozen" / "test_add.py").write_text(
+        "from lib import add\ndef test_add():\n    assert add(2, 3) == 5\n")
+    (tmp_path / "tests_holdout").mkdir()
+    best0 = tmp_path / ".forge" / "best"
+    best0.mkdir(parents=True)
+    (best0 / "lib.py").write_text("def add(a, b):\n    return a + b\n")
+    cand0 = Candidate(0, SimpleNamespace(success=True, confidence=1.0, best_score=1.0,
+                                         reason="green", confidence_breakdown={}), best0)
+
+    class RaisingBuilder:
+        def __init__(self, *a, **k):
+            pass
+
+        def attempt(self, *a, **k):
+            raise RuntimeError("boom")
+
+    cfg = RunConfig(max_iterations=2, holdout_fraction=0.0, population_size=2, max_parallel_candidates=2)
+    clients = dict(mutation_client=None, intent_client=None, property_client=None, oracle_client=None)
+    r = _run_candidate_pool(tmp_path, cfg, StubExaminer(), RaisingBuilder(), [cand0], clients, lambda: 0.0)
+    # candidate 1 crashed but did not abort the pool; candidate 0 (green) wins.
+    assert r.winner_index == 0 and r.success is True and len(r.candidates) == 2
