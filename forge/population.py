@@ -87,7 +87,7 @@ def _run_candidate_pool(goal_dir, config, examiner, builder, candidates, clients
                 i = futures[fut]
                 try:
                     by_index[i] = fut.result()
-                except Exception as exc:  # one candidate crashing must not abort the others
+                except Exception:  # one candidate crashing must not abort the others
                     by_index[i] = Candidate(
                         i,
                         SimpleNamespace(success=False, confidence=None, best_score=-1.0,
