@@ -36,6 +36,7 @@ def test_defaults_are_sane():
     assert cfg.oracle_enabled is True
     assert cfg.oracle_model == "claude-opus-4-8"
     assert cfg.oracle_floor == 1.0
+    assert cfg.oracle_converge_target is False
     assert cfg.adversarial_rounds == 2
     assert cfg.population_size == 3
     assert cfg.max_parallel_candidates == 4

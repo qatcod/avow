@@ -38,6 +38,7 @@ class RunConfig(BaseModel):
     oracle_enabled: bool = True
     oracle_model: str = "claude-opus-4-8"
     oracle_floor: float = 1.0
+    oracle_converge_target: bool = False
     adversarial_rounds: int = 2
     population_size: int = 3
     max_parallel_candidates: int = 4
