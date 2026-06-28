@@ -25,3 +25,14 @@ def test_ties_break_to_lowest_index():
 
 def test_empty_is_minus_one():
     assert select_best([]) == -1
+
+
+def test_ranks_on_common_signals_excluding_intent():
+    from forge.loop import SolveResult
+    # cand 0's raw confidence is inflated by a high suite-level intent term; cand 1 has
+    # strictly better SOLUTION signals. Excluding intent, cand 1 wins.
+    c0 = SolveResult(True, 1.0, 1, "green", None, confidence=0.95,
+                     confidence_breakdown={"holdout": 0.9, "mutation": 0.9, "intent": 1.0, "oracle": 1.0})
+    c1 = SolveResult(True, 1.0, 1, "green", None, confidence=0.95,
+                     confidence_breakdown={"holdout": 1.0, "mutation": 1.0, "oracle": 1.0})
+    assert select_best([c0, c1]) == 1

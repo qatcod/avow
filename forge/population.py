@@ -24,9 +24,21 @@ class PopulationResult:
     winner_index: int
 
 
+def _comparable_confidence(result) -> float:
+    """Mean of the per-signal confidence breakdown EXCLUDING the suite-level `intent`
+    term, so candidates judged with intent (candidate 0, write_tests=True) and without
+    it (candidates 1..N, write_tests=False) are compared on the same solution-specific
+    signals (hold-out / mutation / oracle). Falls back to `.confidence` when no breakdown."""
+    breakdown = getattr(result, "confidence_breakdown", None) or {}
+    common = [v for k, v in breakdown.items() if k != "intent"]
+    if common:
+        return sum(common) / len(common)
+    conf = result.confidence
+    return conf if conf is not None else -1.0
+
+
 def _rank_key(result) -> tuple:
-    conf = result.confidence if result.confidence is not None else -1.0
-    return (1 if result.success else 0, conf, result.best_score)
+    return (1 if result.success else 0, _comparable_confidence(result), result.best_score)
 
 
 def select_best(results: list) -> int:
@@ -61,10 +73,13 @@ def _run_candidate_pool(goal_dir, config, examiner, builder, candidates, clients
 
     results = [c.result for c in candidates]
     winner = select_best(results)
-    win_dir = candidates[winner].solution_dir
     dest = goal_dir / ".forge" / "best"
-    if winner != 0 and Path(win_dir).exists():
-        _snapshot(win_dir, dest)
+    if winner != 0:
+        win_dir = candidates[winner].solution_dir
+        if Path(win_dir).exists():
+            _snapshot(win_dir, dest)
+        else:
+            winner = 0  # selected candidate has no promoted artifact; best/ holds candidate 0
     return PopulationResult(success=results[winner].success, best=results[winner],
                             candidates=candidates, winner_index=winner)
 
