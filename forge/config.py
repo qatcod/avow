@@ -40,6 +40,9 @@ class RunConfig(BaseModel):
     oracle_floor: float = 1.0
     adversarial_rounds: int = 2
     population_size: int = 3
+    supervisor_enabled: bool = False
+    supervisor_model: str = "claude-opus-4-8"
+    supervisor_patience: int = 2
     property_tests_enabled: bool = True
     property_model: str = "claude-opus-4-8"
     property_tests_n: int = 4
