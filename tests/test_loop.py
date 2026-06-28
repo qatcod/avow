@@ -290,3 +290,50 @@ def test_loop_holdout_floor_vetoes_high_average(tmp_path):
     assert r.confidence_breakdown["holdout"] == pytest.approx(0.5)
     assert r.confidence == pytest.approx((0.5 + 1.0 + 1.0) / 3)  # 0.833 — would clear the threshold
     assert r.reason == "low_confidence" and r.success is False   # but the 0.5 < 0.6 floor vetoes it
+
+
+class AlwaysWrongBuilder:
+    """Never converges: writes a wrong implementation every attempt."""
+    def attempt(self, solution_dir, goal, failures):
+        from pathlib import Path as _P
+        from forge.builder import BuilderOutcome
+        (_P(solution_dir) / "lib.py").write_text("def add(a, b):\n    return a - b\n")
+        return BuilderOutcome(plan="still wrong", cost_usd=0.0, raw={})
+
+
+def _fake_supervisor(recommendation, escalate):
+    from types import SimpleNamespace
+    from forge.supervisor import SupervisorVerdict
+
+    class _C:
+        @property
+        def messages(self):
+            return self
+
+        def parse(self, **kwargs):
+            return SimpleNamespace(
+                parsed_output=SupervisorVerdict(assessment="stuck", recommendation=recommendation, escalate=escalate),
+                usage=SimpleNamespace(input_tokens=1, output_tokens=1))
+    return _C()
+
+
+def test_loop_supervisor_escalates(tmp_path):
+    cfg = RunConfig(max_iterations=6, holdout_fraction=0.0, plateau_patience=5,
+                    supervisor_enabled=True, supervisor_patience=1)
+    r = solve(_goal(tmp_path), cfg, StubExaminer(), AlwaysWrongBuilder(), now=lambda: 0.0,
+              supervisor_client=_fake_supervisor("abort", True))
+    assert r.reason == "supervisor_escalate" and r.success is False
+
+
+def test_loop_supervisor_continue_falls_through_to_plateau(tmp_path):
+    cfg = RunConfig(max_iterations=6, holdout_fraction=0.0, plateau_patience=3,
+                    supervisor_enabled=True, supervisor_patience=1)
+    r = solve(_goal(tmp_path), cfg, StubExaminer(), AlwaysWrongBuilder(), now=lambda: 0.0,
+              supervisor_client=_fake_supervisor("continue", False))
+    assert r.reason == "plateau" and r.success is False   # supervisor advised continue -> normal stop
+
+
+def test_loop_supervisor_dormant_by_default(tmp_path):
+    cfg = RunConfig(max_iterations=6, holdout_fraction=0.0, plateau_patience=2)  # supervisor off
+    r = solve(_goal(tmp_path), cfg, StubExaminer(), AlwaysWrongBuilder(), now=lambda: 0.0)
+    assert r.reason == "plateau"   # no supervisor_client + disabled -> unchanged behavior

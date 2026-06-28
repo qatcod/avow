@@ -17,6 +17,7 @@ from forge.workspace import Workspace
 from forge.confidence import aggregate_confidence
 from forge.properties import generate_property_tests
 from forge.oracle import run_oracle_check
+from forge.supervisor import review_trajectory
 
 
 @dataclass
@@ -57,6 +58,7 @@ def solve(
     escalate=None,
     property_client=None,
     oracle_client=None,
+    supervisor_client=None,
 ) -> SolveResult:
     goal_dir = Path(goal_dir)
     goal = (goal_dir / "goal.md").read_text()
@@ -123,6 +125,9 @@ def solve(
     rounds_without_improvement = 0
     best_failures: list = []
     reason = "max_iterations"
+    attempt_history: list = []
+    supervisor_fired = False
+    supervisor_hint = None
 
     while True:
         stopped = budget.exhausted(now())
@@ -133,12 +138,13 @@ def solve(
         budget.tick_iteration()
         workspace.seed_from(best_dir if have_best else None)
 
-        outcome = builder.attempt(workspace.solution_dir, goal, best_failures)
+        attempt_goal = goal if supervisor_hint is None else f"{goal}\n\nSUPERVISOR GUIDANCE: {supervisor_hint}"
+        outcome = builder.attempt(workspace.solution_dir, attempt_goal, best_failures)
         budget.charge_usd(outcome.cost_usd)
 
         result = runner.run()
 
-        log.record(AttemptRecord(
+        rec = AttemptRecord(
             iteration=budget.iterations,
             score=result.score,
             is_green=result.is_green,
@@ -146,7 +152,9 @@ def solve(
             failing=[f.nodeid for f in result.failures],
             plan=outcome.plan,
             cost_usd=outcome.cost_usd,
-        ))
+        )
+        log.record(rec)
+        attempt_history.append(rec)
 
         improved = result.score > best_score
         if improved:
@@ -224,6 +232,23 @@ def solve(
                                mscore, surv, intent_score=intent_score,
                                confidence=confidence, confidence_breakdown=breakdown,
                                oracle_agreement=oracle_agreement)
+
+        if (config.supervisor_enabled and supervisor_client is not None and not supervisor_fired
+                and rounds_without_improvement >= config.supervisor_patience):
+            supervisor_fired = True
+            before = budget.spent_usd
+            verdict, s_in, s_out = review_trajectory(goal, attempt_history, supervisor_client, config.supervisor_model)
+            budget.charge_tokens(config.supervisor_model, s_in, s_out)
+            if verdict is not None:
+                log.record(AttemptRecord(
+                    iteration=budget.iterations, score=best_score, is_green=False,
+                    diff_summary=f"supervisor: {verdict.recommendation}; {verdict.assessment[:80]}",
+                    failing=[], plan="supervisor", cost_usd=budget.spent_usd - before))
+                if verdict.escalate or verdict.recommendation == "abort":
+                    reason = "supervisor_escalate"
+                    break
+                if verdict.recommendation == "redirect":
+                    supervisor_hint = verdict.assessment
 
         if rounds_without_improvement >= config.plateau_patience:
             reason = "plateau"
