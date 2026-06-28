@@ -40,6 +40,7 @@ class RunConfig(BaseModel):
     oracle_floor: float = 1.0
     adversarial_rounds: int = 2
     population_size: int = 3
+    max_parallel_candidates: int = 4
     supervisor_enabled: bool = False
     supervisor_model: str = "claude-opus-4-8"
     supervisor_patience: int = 2

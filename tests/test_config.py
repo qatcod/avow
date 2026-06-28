@@ -38,6 +38,7 @@ def test_defaults_are_sane():
     assert cfg.oracle_floor == 1.0
     assert cfg.adversarial_rounds == 2
     assert cfg.population_size == 3
+    assert cfg.max_parallel_candidates == 4
     assert cfg.supervisor_enabled is False        # ships dormant
     assert cfg.supervisor_model == "claude-opus-4-8"
     assert cfg.supervisor_patience == 2
