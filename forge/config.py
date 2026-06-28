@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class RunConfig(BaseModel):
@@ -46,6 +46,20 @@ class RunConfig(BaseModel):
     property_tests_enabled: bool = True
     property_model: str = "claude-opus-4-8"
     property_tests_n: int = 4
+
+    @model_validator(mode="after")
+    def _supervisor_patience_below_plateau(self) -> "RunConfig":
+        # The Supervisor fires at supervisor_patience and (for a redirect) hands the Builder a
+        # guided attempt. If supervisor_patience >= plateau_patience, the loop plateaus the same
+        # iteration the hint is set, so the redirect would never reach the Builder. Make that
+        # misconfiguration a loud error rather than a silent no-op.
+        if self.supervisor_enabled and self.supervisor_patience >= self.plateau_patience:
+            raise ValueError(
+                "supervisor_patience must be < plateau_patience when supervisor_enabled "
+                f"(got supervisor_patience={self.supervisor_patience}, "
+                f"plateau_patience={self.plateau_patience})"
+            )
+        return self
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "RunConfig":

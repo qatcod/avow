@@ -56,3 +56,16 @@ def test_from_yaml_overrides_then_falls_back(tmp_path: Path):
 def test_from_yaml_missing_file_is_all_defaults(tmp_path: Path):
     cfg = RunConfig.from_yaml(tmp_path / "nope.yaml")
     assert cfg.max_iterations == 12
+
+
+def test_supervisor_patience_must_be_below_plateau_when_enabled():
+    import pytest
+
+    # enabled + supervisor_patience >= plateau_patience -> the redirect would never reach the
+    # builder, so this is rejected loudly.
+    with pytest.raises(ValueError):
+        RunConfig(supervisor_enabled=True, supervisor_patience=3, plateau_patience=3)
+    # disabled -> no constraint; the dormant default is fine.
+    RunConfig(supervisor_enabled=False, supervisor_patience=5, plateau_patience=3)
+    # enabled + below plateau -> fine.
+    RunConfig(supervisor_enabled=True, supervisor_patience=2, plateau_patience=3)
