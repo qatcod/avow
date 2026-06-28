@@ -51,6 +51,7 @@ forge mutate <solution-dir> <tests-dir>      # suite-strength score for any code
 forge intent-check <goal.md> <tests-dir>     # does this suite actually test this goal?
 forge propertize <goal.md> <out-dir>         # generate Hypothesis property tests for a goal
 forge oracle <solution-dir> <goal.md>        # differential-test a solution against an independent reference impl
+forge supervise <run.jsonl> <goal.md>        # review a recorded run's trajectory; the Supervisor recommends continue/redirect/escalate
 forge verify <solution> <tests> <goal.md>    # one calibrated confidence number for any artifact
 ```
 
@@ -81,4 +82,4 @@ Architecture and per-feature specs/plans live in `docs/specs/` and `docs/plans/`
 
 ## Status
 
-**All five verification layers of the design are built**: execution-grounded checks (property + reference-oracle), decorrelated judges (cross-model panel + adversarial-escalating Examiner), test-the-tests (mutation + hold-out), intent triangulation (back-translation), and calibrated confidence (aggregation + hold-out/panel/oracle floors) — plus the self-improvement *expand phase* (`forge improve`) and adversarial hardening (`forge harden`). It also ships **Population / Hybrid search** (`forge population` — run N candidate solutions, the verifier picks the winner; `--hybrid` escalates only on plateau). The **full moat is proven end-to-end against live Claude** (Examiner-written suite + property fuzzing + the 3-model intent panel + mutation + confidence). Roadmap: the Supervisor (event-triggered trajectory guardian), true cross-provider panels, learned signal weights, parallel candidate execution.
+**All five verification layers of the design are built**: execution-grounded checks (property + reference-oracle), decorrelated judges (cross-model panel + adversarial-escalating Examiner), test-the-tests (mutation + hold-out), intent triangulation (back-translation), and calibrated confidence (aggregation + hold-out/panel/oracle floors) — plus the self-improvement *expand phase* (`forge improve`) and adversarial hardening (`forge harden`). It also ships **Population / Hybrid search** (`forge population` — run N candidate solutions, the verifier picks the winner; `--hybrid` escalates only on plateau) and the **Supervisor** (`forge supervise` / opt-in `supervisor_enabled` — an event-triggered trajectory guardian that judges a plateauing run and recommends redirect/escalate; never enforces). All four agents of the design (Builder · Examiner · Ideator · Supervisor) are built, and the **full moat is proven end-to-end against live Claude** (Examiner-written suite + property fuzzing + the 3-model intent panel + mutation + confidence). Roadmap: true cross-provider panels, learned signal weights, parallel candidate execution.
