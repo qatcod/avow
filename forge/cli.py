@@ -196,6 +196,30 @@ def _cmd_population(args) -> int:
     return 0 if result.success else 2
 
 
+def _cmd_supervise(args) -> int:
+    import json
+    from types import SimpleNamespace
+    import anthropic
+    from forge.supervisor import review_trajectory
+
+    config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
+    goal = Path(args.goal_file).read_text(encoding="utf-8")
+    history = []
+    for line in Path(args.run_jsonl).read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        d = json.loads(line)
+        history.append(SimpleNamespace(
+            iteration=d.get("iteration", 0), score=d.get("score", 0.0),
+            is_green=d.get("is_green", False), plan=d.get("plan", ""),
+            failing=d.get("failing", [])))
+
+    verdict, _in, _out = review_trajectory(goal, history, anthropic.Anthropic(), config.supervisor_model)
+    print(f"supervisor recommendation: {verdict.recommendation} (escalate={verdict.escalate})")
+    print(f"assessment: {verdict.assessment}")
+    return 0
+
+
 def build_examiner(config: RunConfig) -> Examiner:
     import anthropic  # imported lazily so unit tests don't need network/creds
     return Examiner(anthropic.Anthropic(), model=config.examiner_model)
@@ -258,6 +282,11 @@ def main(argv: list[str] | None = None) -> int:
     pop_p.add_argument("--no-llm-verify", action="store_true")
     pop_p.add_argument("--hybrid", action="store_true",
                        help="run one attempt first; escalate to the population only on failure")
+    sup_p = sub.add_parser("supervise",
+                           help="review a recorded run's trajectory and print the Supervisor's verdict")
+    sup_p.add_argument("run_jsonl")
+    sup_p.add_argument("goal_file")
+    sup_p.add_argument("--config", default=None)
     args = parser.parse_args(argv)
 
     if args.command == "mutate":
@@ -283,6 +312,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "population":
         return _cmd_population(args)
+
+    if args.command == "supervise":
+        return _cmd_supervise(args)
 
     goal_dir = Path(args.goal_dir)
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
