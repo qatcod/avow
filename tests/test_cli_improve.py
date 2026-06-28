@@ -25,6 +25,14 @@ class DispatchClient:
         elif name == "IntentMatch":
             from forge.backtranslation import IntentMatch
             po = IntentMatch(score=0.9, divergences=[])
+        elif name == "_OraclePair":
+            from forge.oracle import _OraclePair
+            po = _OraclePair(
+                reference_code="def add(a, b):\n    return a + b\n",
+                diff_test_code=("from lib import add as _sol\nfrom ref import add as _ref\n"
+                                "from hypothesis import given, strategies as st\n"
+                                "@given(st.integers(), st.integers())\n"
+                                "def test_d(a, b):\n    assert _sol(a, b) == _ref(a, b)\n"))
         else:  # _PropertySet
             from forge.properties import _PropertySet
             po = _PropertySet(tests=[])

@@ -127,7 +127,7 @@ def _cmd_improve(args) -> int:
 
     result = improve(Path(args.goal_dir), config, examiner, builder,
                      ideator_client=verify_client, intent_client=verify_client,
-                     property_client=verify_client)
+                     property_client=verify_client, oracle_client=verify_client)
 
     print(f"result: success={result.success} expansions={result.expansions}")
     for i, r in enumerate(result.rounds):

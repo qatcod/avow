@@ -50,7 +50,7 @@ def _snapshot(src, dest) -> None:
 
 def improve(goal_dir, config, examiner, builder, *, ideator_client=None, escalate=None,
             mutation_client=None, intent_client=None, property_client=None,
-            now=time.monotonic) -> ImproveResult:
+            oracle_client=None, now=time.monotonic) -> ImproveResult:
     goal_dir = Path(goal_dir)
     goal = (goal_dir / "goal.md").read_text()
     frozen = goal_dir / "tests_frozen"
@@ -60,7 +60,7 @@ def improve(goal_dir, config, examiner, builder, *, ideator_client=None, escalat
 
     result = solve(goal_dir, config, examiner, builder, now=now, write_tests=True,
                    mutation_client=mutation_client, intent_client=intent_client,
-                   property_client=property_client)
+                   property_client=property_client, oracle_client=oracle_client)
     rounds = [result]
     expansions = 0
     best_round = -1
@@ -82,7 +82,7 @@ def improve(goal_dir, config, examiner, builder, *, ideator_client=None, escalat
         _append_tests(holdout, held, expansions + 1)
         result = solve(goal_dir, config, examiner, builder, now=now, write_tests=False,
                        mutation_client=mutation_client, intent_client=intent_client,
-                       property_client=property_client)
+                       property_client=property_client, oracle_client=oracle_client)
         rounds.append(result)
         expansions += 1
         if result.success and best_src.exists():
