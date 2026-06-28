@@ -46,6 +46,7 @@ The builder drives the [`claude`](https://claude.com/claude-code) CLI (uses its 
 forge solve <goal-dir>                       # the full loop: build → verify → confidence
 forge improve <goal-dir>                     # self-improvement: converge, then propose & build the next feature, repeat
 forge harden <goal-dir>                       # converge, then escalate: the Examiner writes harder tests targeting the solution, repeat
+forge population <goal-dir> [--hybrid]        # run N candidate solutions; the verifier picks the winner (--hybrid escalates only on plateau)
 forge mutate <solution-dir> <tests-dir>      # suite-strength score for any code (offline AST by default; --llm adds cross-model mutants)
 forge intent-check <goal.md> <tests-dir>     # does this suite actually test this goal?
 forge propertize <goal.md> <out-dir>         # generate Hypothesis property tests for a goal
@@ -80,4 +81,4 @@ Architecture and per-feature specs/plans live in `docs/specs/` and `docs/plans/`
 
 ## Status
 
-**All five verification layers of the design are built**: execution-grounded checks (property + reference-oracle), decorrelated judges (cross-model panel + adversarial-escalating Examiner), test-the-tests (mutation + hold-out), intent triangulation (back-translation), and calibrated confidence (aggregation + hold-out/panel/oracle floors) — plus the self-improvement *expand phase* (`forge improve`) and adversarial hardening (`forge harden`). The **full moat is proven end-to-end against live Claude** (Examiner-written suite + property fuzzing + the 3-model intent panel + mutation + confidence). Roadmap: Population/Hybrid search strategies behind the swappable seam, the Supervisor (event-triggered trajectory guardian), true cross-provider panels, learned signal weights.
+**All five verification layers of the design are built**: execution-grounded checks (property + reference-oracle), decorrelated judges (cross-model panel + adversarial-escalating Examiner), test-the-tests (mutation + hold-out), intent triangulation (back-translation), and calibrated confidence (aggregation + hold-out/panel/oracle floors) — plus the self-improvement *expand phase* (`forge improve`) and adversarial hardening (`forge harden`). It also ships **Population / Hybrid search** (`forge population` — run N candidate solutions, the verifier picks the winner; `--hybrid` escalates only on plateau). The **full moat is proven end-to-end against live Claude** (Examiner-written suite + property fuzzing + the 3-model intent panel + mutation + confidence). Roadmap: the Supervisor (event-triggered trajectory guardian), true cross-provider panels, learned signal weights, parallel candidate execution.
