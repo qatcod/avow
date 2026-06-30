@@ -1,10 +1,10 @@
 from pathlib import Path
 from types import SimpleNamespace
-import forge.cli as cli
-from forge.examiner import TestSuite, TestFile
-from forge.properties import _PropertySet
-from forge.backtranslation import _InferredGoal, IntentMatch
-from forge.builder import BuilderOutcome
+import hermit.cli as cli
+from hermit.examiner import TestSuite, TestFile
+from hermit.properties import _PropertySet
+from hermit.backtranslation import _InferredGoal, IntentMatch
+from hermit.builder import BuilderOutcome
 
 
 class DispatchClient:
@@ -39,7 +39,7 @@ class StubBuilder:
         return BuilderOutcome(plan="ok", cost_usd=0.0, raw={})
 
 
-def test_forge_solve_activates_intent_and_property(tmp_path, capsys, monkeypatch):
+def test_hermit_solve_activates_intent_and_property(tmp_path, capsys, monkeypatch):
     (tmp_path / "goal.md").write_text("Build add(a, b) returning a + b.")
     import anthropic
     monkeypatch.setattr(anthropic, "Anthropic", lambda *a, **k: DispatchClient())

@@ -1,6 +1,6 @@
 from pathlib import Path
 from types import SimpleNamespace
-from forge.backtranslation import run_intent_check, IntentResult, _InferredGoal, IntentMatch
+from hermit.backtranslation import run_intent_check, IntentResult, _InferredGoal, IntentMatch
 
 
 class DispatchingClient:

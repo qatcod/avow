@@ -1,7 +1,7 @@
 from pathlib import Path
 from types import SimpleNamespace
-import forge.cli as cli
-from forge.backtranslation import _InferredGoal, IntentMatch
+import hermit.cli as cli
+from hermit.backtranslation import _InferredGoal, IntentMatch
 
 
 class DispatchingClient:

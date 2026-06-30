@@ -1,6 +1,6 @@
 from pathlib import Path
 from types import SimpleNamespace
-from forge.mutation import run_mutation_testing, _MutantList, _MutantSpec
+from hermit.mutation import run_mutation_testing, _MutantList, _MutantSpec
 
 
 CMD = ["python", "-m", "pytest", "-q"]

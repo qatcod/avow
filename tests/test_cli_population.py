@@ -1,8 +1,8 @@
 from pathlib import Path
 from types import SimpleNamespace
-import forge.cli as cli
-from forge.examiner import TestSuite, TestFile
-from forge.builder import BuilderOutcome
+import hermit.cli as cli
+from hermit.examiner import TestSuite, TestFile
+from hermit.builder import BuilderOutcome
 
 
 class DispatchClient:
@@ -16,16 +16,16 @@ class DispatchClient:
             po = TestSuite(test_plan="add", tests=[TestFile(
                 path="test_add.py", content="from lib import add\ndef test_add():\n    assert add(2, 3) == 5\n")])
         elif name == "_InferredGoal":
-            from forge.backtranslation import _InferredGoal
+            from hermit.backtranslation import _InferredGoal
             po = _InferredGoal(inferred_goal="add two integers")
         elif name == "IntentMatch":
-            from forge.backtranslation import IntentMatch
+            from hermit.backtranslation import IntentMatch
             po = IntentMatch(score=0.9, divergences=[])
         elif name == "_PropertySet":
-            from forge.properties import _PropertySet
+            from hermit.properties import _PropertySet
             po = _PropertySet(tests=[])
         else:  # _OraclePair
-            from forge.oracle import _OraclePair
+            from hermit.oracle import _OraclePair
             po = _OraclePair(reference_code="def add(a, b):\n    return a + b\n",
                              diff_test_code=("from lib import add as _sol\nfrom ref import add as _ref\n"
                                              "from hypothesis import given, strategies as st\n"
@@ -44,12 +44,12 @@ class StubBuilder:
 
 
 def _cfg(tmp_path):
-    p = tmp_path / "forge.yaml"
+    p = tmp_path / "hermit.yaml"
     p.write_text("population_size: 2\nholdout_fraction: 0.0\nmax_iterations: 5\n")
     return p
 
 
-def test_forge_population_cli(tmp_path, capsys, monkeypatch):
+def test_hermit_population_cli(tmp_path, capsys, monkeypatch):
     (tmp_path / "goal.md").write_text("Build add(a, b) returning a + b.")
     import anthropic
     monkeypatch.setattr(anthropic, "Anthropic", lambda *a, **k: DispatchClient())

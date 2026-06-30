@@ -1,8 +1,8 @@
 import json
 from pathlib import Path
 from types import SimpleNamespace
-import forge.cli as cli
-from forge.supervisor import SupervisorVerdict
+import hermit.cli as cli
+from hermit.supervisor import SupervisorVerdict
 
 
 class FakeClient:

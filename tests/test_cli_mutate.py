@@ -1,5 +1,5 @@
 from pathlib import Path
-from forge.cli import main
+from hermit.cli import main
 
 
 def test_mutate_offline_ast_only(tmp_path: Path, capsys):

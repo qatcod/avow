@@ -1,5 +1,5 @@
 from pathlib import Path
-from forge.cli import main
+from hermit.cli import main
 
 
 def test_cli_runs_with_injected_no_regenerate(tmp_path: Path, monkeypatch, capsys):
@@ -12,7 +12,7 @@ def test_cli_runs_with_injected_no_regenerate(tmp_path: Path, monkeypatch, capsy
     )
 
     # Patch the Builder so the CLI doesn't spawn `claude`.
-    import forge.cli as cli
+    import hermit.cli as cli
 
     class StubBuilder:
         def __init__(self, *a, **k):
@@ -21,13 +21,13 @@ def test_cli_runs_with_injected_no_regenerate(tmp_path: Path, monkeypatch, capsy
         def attempt(self, solution_dir, goal, failures):
             self.calls += 1
             (Path(solution_dir) / "lib.py").write_text("def add(a, b):\n    return a + b\n")
-            from forge.builder import BuilderOutcome
+            from hermit.builder import BuilderOutcome
             return BuilderOutcome(plan="ok", cost_usd=0.0, raw={})
 
     monkeypatch.setattr(cli, "Builder", StubBuilder)
 
     rc = main(["solve", str(tmp_path), "--no-regenerate", "--yes"])
     assert rc == 0
-    assert (tmp_path / ".forge" / "best" / "lib.py").exists()
+    assert (tmp_path / ".hermit" / "best" / "lib.py").exists()
     out = capsys.readouterr().out
     assert "confidence:" in out

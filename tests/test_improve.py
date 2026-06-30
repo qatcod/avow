@@ -1,11 +1,11 @@
 # tests/test_improve.py
 from pathlib import Path
 from types import SimpleNamespace
-from forge.config import RunConfig
-from forge.improve import improve, ImproveResult
-from forge.examiner import ExaminerResult, TestSuite, TestFile
-from forge.ideator import _IdeaSet, Idea
-from forge.builder import BuilderOutcome
+from hermit.config import RunConfig
+from hermit.improve import improve, ImproveResult
+from hermit.examiner import ExaminerResult, TestSuite, TestFile
+from hermit.ideator import _IdeaSet, Idea
+from hermit.builder import BuilderOutcome
 
 
 def _goal(tmp_path: Path) -> Path:

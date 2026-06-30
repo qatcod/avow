@@ -1,7 +1,7 @@
 # tests/test_oracle_run.py
 from pathlib import Path
 from types import SimpleNamespace
-from forge.oracle import run_oracle_check, _OraclePair
+from hermit.oracle import run_oracle_check, _OraclePair
 
 _DIFF = ("from lib import add as _sol\n"
          "from ref import add as _ref\n"

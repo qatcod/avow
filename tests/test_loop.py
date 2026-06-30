@@ -1,10 +1,10 @@
 # tests/test_loop.py
 import pytest
 from pathlib import Path
-from forge.loop import solve, SolveResult
-from forge.config import RunConfig
-from forge.examiner import Examiner, ExaminerResult, TestSuite, TestFile
-from forge.scoring import FailureInfo
+from hermit.loop import solve, SolveResult
+from hermit.config import RunConfig
+from hermit.examiner import Examiner, ExaminerResult, TestSuite, TestFile
+from hermit.scoring import FailureInfo
 
 
 # --- fakes ---------------------------------------------------------------
@@ -33,7 +33,7 @@ class FlakyBuilder:
         self.calls += 1
         src = "def add(a, b):\n    return a + b\n" if self.calls >= 2 else "def add(a, b):\n    return a - b\n"
         (Path(solution_dir) / "lib.py").write_text(src)
-        from forge.builder import BuilderOutcome
+        from hermit.builder import BuilderOutcome
         return BuilderOutcome(plan=f"attempt {self.calls}", cost_usd=0.01, raw={})
 
 
@@ -60,7 +60,7 @@ def test_loop_stops_at_max_iterations_when_never_green(tmp_path: Path):
     class AlwaysWrong:
         def attempt(self, solution_dir, goal, failures):
             (Path(solution_dir) / "lib.py").write_text("def add(a, b):\n    return 0\n")
-            from forge.builder import BuilderOutcome
+            from hermit.builder import BuilderOutcome
             return BuilderOutcome(plan="nope", cost_usd=0.01, raw={})
 
     cfg = RunConfig(max_iterations=3, plateau_patience=99, holdout_fraction=0.0)
@@ -74,7 +74,7 @@ def test_loop_writes_frozen_tests_and_run_log(tmp_path: Path):
     cfg = RunConfig(max_iterations=2, holdout_fraction=0.0)
     solve(_goal(tmp_path), cfg, StubExaminer(), FlakyBuilder(), now=lambda: 0.0)
     assert (tmp_path / "tests_frozen" / "test_add.py").exists()
-    log = (tmp_path / ".forge" / "run.jsonl").read_text().strip().splitlines()
+    log = (tmp_path / ".hermit" / "run.jsonl").read_text().strip().splitlines()
     assert len(log) >= 1
 
 
@@ -89,7 +89,7 @@ def test_loop_reports_mutation_score_on_green(tmp_path):
 
 def test_loop_records_intent_score(tmp_path):
     from types import SimpleNamespace
-    from forge.backtranslation import _InferredGoal, IntentMatch
+    from hermit.backtranslation import _InferredGoal, IntentMatch
 
     class FakeIntentClient:
         @property
@@ -119,7 +119,7 @@ def test_loop_intent_score_none_without_client(tmp_path):
 
 def _fake_intent_client(score):
     from types import SimpleNamespace
-    from forge.backtranslation import _InferredGoal, IntentMatch
+    from hermit.backtranslation import _InferredGoal, IntentMatch
 
     class FakeIntentClient:
         @property
@@ -175,8 +175,8 @@ def test_loop_gating_off_reports_only(tmp_path):
 
 def test_loop_adds_property_tests_to_frozen_suite(tmp_path):
     from types import SimpleNamespace
-    from forge.examiner import TestFile
-    from forge.properties import _PropertySet
+    from hermit.examiner import TestFile
+    from hermit.properties import _PropertySet
 
     class FakePropClient:
         @property
@@ -211,7 +211,7 @@ def test_loop_no_property_client_skips(tmp_path):
 
 def test_loop_panel_disagreement_floor(tmp_path):
     from types import SimpleNamespace
-    from forge.backtranslation import _InferredGoal, IntentMatch
+    from hermit.backtranslation import _InferredGoal, IntentMatch
 
     class DisagreeingPanel:
         @property
@@ -238,7 +238,7 @@ def test_loop_panel_disagreement_floor(tmp_path):
 
 def test_loop_oracle_disagreement_floor(tmp_path):
     from types import SimpleNamespace
-    from forge.oracle import _OraclePair
+    from hermit.oracle import _OraclePair
 
     class DisagreeingOracle:
         @property
@@ -296,14 +296,14 @@ class AlwaysWrongBuilder:
     """Never converges: writes a wrong implementation every attempt."""
     def attempt(self, solution_dir, goal, failures):
         from pathlib import Path as _P
-        from forge.builder import BuilderOutcome
+        from hermit.builder import BuilderOutcome
         (_P(solution_dir) / "lib.py").write_text("def add(a, b):\n    return a - b\n")
         return BuilderOutcome(plan="still wrong", cost_usd=0.0, raw={})
 
 
 def _fake_supervisor(recommendation, escalate):
     from types import SimpleNamespace
-    from forge.supervisor import SupervisorVerdict
+    from hermit.supervisor import SupervisorVerdict
 
     class _C:
         @property
@@ -341,7 +341,7 @@ def test_loop_supervisor_dormant_by_default(tmp_path):
 
 def test_loop_oracle_converge_target(tmp_path):
     from types import SimpleNamespace
-    from forge.oracle import _OraclePair
+    from hermit.oracle import _OraclePair
 
     class FakeOracle:
         @property

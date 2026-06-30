@@ -1,4 +1,4 @@
-from forge.scoring import parse_report, TestResult, FailureInfo
+from hermit.scoring import parse_report, TestResult, FailureInfo
 
 
 def _report(tests):

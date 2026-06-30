@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from forge.examiner import Examiner, TestSuite, TestFile, split_suite
+from hermit.examiner import Examiner, TestSuite, TestFile, split_suite
 
 
 class FakeMessages:

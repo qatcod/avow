@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from forge.backtranslation import back_translate, _InferredGoal
+from hermit.backtranslation import back_translate, _InferredGoal
 
 
 class FakeMessages:

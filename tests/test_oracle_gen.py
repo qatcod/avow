@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from forge.oracle import generate_oracle, _OraclePair
+from hermit.oracle import generate_oracle, _OraclePair
 
 
 class FakeMessages:

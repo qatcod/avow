@@ -1,5 +1,5 @@
 from pathlib import Path
-from forge.memory import RunLog, AttemptRecord
+from hermit.memory import RunLog, AttemptRecord
 
 
 def test_records_round_trip(tmp_path: Path):

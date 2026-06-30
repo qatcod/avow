@@ -1,4 +1,4 @@
-from forge.ideator import select_idea, Idea
+from hermit.ideator import select_idea, Idea
 
 
 def _idea(objective, risk):

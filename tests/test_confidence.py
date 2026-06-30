@@ -1,5 +1,5 @@
 import pytest
-from forge.confidence import aggregate_confidence, ConfidenceResult
+from hermit.confidence import aggregate_confidence, ConfidenceResult
 
 W = {"holdout": 1.0, "mutation": 1.0, "intent": 1.0}
 

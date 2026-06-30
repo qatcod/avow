@@ -1,9 +1,9 @@
 # tests/test_harden.py
 from pathlib import Path
-from forge.config import RunConfig
-from forge.harden import harden, HardenResult
-from forge.examiner import ExaminerResult, TestSuite, TestFile
-from forge.builder import BuilderOutcome
+from hermit.config import RunConfig
+from hermit.harden import harden, HardenResult
+from hermit.examiner import ExaminerResult, TestSuite, TestFile
+from hermit.builder import BuilderOutcome
 
 
 def _goal(tmp_path: Path) -> Path:

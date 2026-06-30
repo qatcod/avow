@@ -1,6 +1,6 @@
 from types import SimpleNamespace
-from forge.properties import generate_property_tests, _PropertySet
-from forge.examiner import TestFile
+from hermit.properties import generate_property_tests, _PropertySet
+from hermit.examiner import TestFile
 
 
 class FakeMessages:

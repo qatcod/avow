@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from forge.ideator import propose_ideas, Idea, _IdeaSet
+from hermit.ideator import propose_ideas, Idea, _IdeaSet
 
 
 class FakeMessages:

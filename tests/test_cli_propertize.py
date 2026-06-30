@@ -1,8 +1,8 @@
 from pathlib import Path
 from types import SimpleNamespace
-import forge.cli as cli
-from forge.properties import _PropertySet
-from forge.examiner import TestFile
+import hermit.cli as cli
+from hermit.properties import _PropertySet
+from hermit.examiner import TestFile
 
 
 class FakeClient:

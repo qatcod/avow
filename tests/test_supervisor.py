@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from forge.supervisor import review_trajectory, SupervisorVerdict
+from hermit.supervisor import review_trajectory, SupervisorVerdict
 
 
 class FakeMessages:

@@ -1,5 +1,5 @@
 from pathlib import Path
-from forge.runner import Runner
+from hermit.runner import Runner
 
 
 def _make_goal(tmp_path: Path, solution_src: str):

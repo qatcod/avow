@@ -1,8 +1,8 @@
 import json
 import subprocess
 from pathlib import Path
-from forge.builder import Builder, BuilderOutcome
-from forge.scoring import FailureInfo
+from hermit.builder import Builder, BuilderOutcome
+from hermit.scoring import FailureInfo
 
 
 def test_attempt_invokes_claude_and_parses_json(tmp_path: Path):

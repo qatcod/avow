@@ -1,7 +1,7 @@
 from pathlib import Path
 from types import SimpleNamespace
-import forge.cli as cli
-from forge.oracle import _OraclePair
+import hermit.cli as cli
+from hermit.oracle import _OraclePair
 
 
 class FakeClient:
