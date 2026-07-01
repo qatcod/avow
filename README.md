@@ -52,8 +52,11 @@ hermit intent-check <goal.md> <tests-dir>     # does this suite actually test th
 hermit propertize <goal.md> <out-dir>         # generate Hypothesis property tests for a goal
 hermit oracle <solution-dir> <goal.md>        # differential-test a solution against an independent reference impl
 hermit supervise <run.jsonl> <goal.md>        # review a recorded run's trajectory; the Supervisor recommends continue/redirect/escalate
+hermit adjudicate <solution> <tests> <goal.md> # a stalled build: decide BY EXECUTION which failing tests are the Examiner's bug (run them vs K independent references)
 hermit verify <solution> <tests> <goal.md>    # one calibrated confidence number for any artifact
 ```
+
+When a build stalls just short of green, `hermit adjudicate` answers *"is this failing test the solution's bug or the Examiner's?"* by generating K independent reference implementations and **running each failing test against all of them** — if the independent correct implementations also fail it, the test contradicts correctness (a `TEST BUG`); if they pass it, the solution is the outlier. The verdict is decided by execution, not by an LLM's opinion. It's advisory (never auto-edits a test) and available in-loop via the opt-in `adjudicate_enabled`.
 
 `hermit improve` runs the two-phase loop: converge on the goal, then an **Ideator** proposes the next feature (each with a verifier and a risk label), a **leash** auto-pursues objective low-risk ideas (and escalates the rest), the chosen idea's test joins the suite, and the loop re-converges — bounded by a round cap.
 

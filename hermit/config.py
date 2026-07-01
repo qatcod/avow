@@ -65,6 +65,12 @@ class RunConfig(BaseModel):
                 f"(got supervisor_patience={self.supervisor_patience}, "
                 f"plateau_patience={self.plateau_patience})"
             )
+        if self.adjudicate_references_k < 1:
+            raise ValueError(
+                "adjudicate_references_k must be >= 1 (it is the number of independent references "
+                f"each failing test is voted on by; got {self.adjudicate_references_k}). "
+                "Set adjudicate_enabled=False to turn adjudication off."
+            )
         return self
 
     @classmethod
