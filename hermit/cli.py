@@ -236,10 +236,20 @@ def _cmd_adjudicate(args) -> int:
     adj = adjudicate_failures(goal, Path(args.tests_dir), failing, anthropic.Anthropic(),
                               config.adjudicate_model, config.test_command,
                               k=config.adjudicate_references_k, timeout=config.test_timeout_seconds)
-    labels = {"test_bug": "TEST BUG", "solution_bug": "solution bug", "inconclusive": "inconclusive"}
     for v in adj.verdicts:
-        print(f"  {v.test_id}: {labels[v.verdict]}  "
-              f"({v.references_failed}/{v.references_total} independent references also fail it)")
+        passed = v.references_total - v.references_failed
+        if v.verdict == "test_bug":
+            print(f"  {v.test_id}: TEST BUG — {v.references_failed}/{v.references_total} "
+                  f"independent references ALSO fail it (no correct implementation passes it)")
+        elif v.verdict == "solution_bug":
+            print(f"  {v.test_id}: SOLUTION BUG — {passed}/{v.references_total} "
+                  f"independent references pass it (the solution is the outlier)")
+        else:
+            print(f"  {v.test_id}: INCONCLUSIVE — references split "
+                  f"({v.references_failed} fail / {passed} pass{'' if v.references_total else ', none usable'})")
+    suspected = [v.test_id for v in adj.verdicts if v.verdict == "test_bug"]
+    if suspected:
+        print(f"\nSuspected Examiner-authored bad test(s): {suspected}")
     return 0
 
 
