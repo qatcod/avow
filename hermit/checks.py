@@ -17,14 +17,23 @@ class CheckResult:
 def run_checks(solution_dir, checks, timeout: int = 120) -> list[CheckResult]:
     """Run each ``{name, command}`` check in ``solution_dir``.
 
-    A check passes iff its command exits 0. A missing tool or a timeout is a
-    *failed* check, not a crash — so a misconfigured check never takes down a run.
+    A check passes iff its command exits 0. Anything that goes wrong — a missing
+    tool, a non-executable file, a timeout, or a malformed check entry — is a
+    *failed* check, never an exception that aborts the run. This guarantee is
+    load-bearing: a single misconfigured check must not lose a long autonomous
+    run's budget and progress. The per-check timeout is shared with the test
+    timeout (``test_timeout_seconds``); N checks can take up to N×timeout.
     """
     solution_dir = Path(solution_dir)
     results: list[CheckResult] = []
     for check in checks:
         name = check.get("name", "check")
-        command = check["command"]
+        command = check.get("command")
+        if not isinstance(command, list) or not command:
+            results.append(CheckResult(
+                name=name, passed=False,
+                detail=f"check misconfigured: `command` must be a non-empty list (got {command!r})"))
+            continue
         try:
             proc = subprocess.run(command, cwd=solution_dir, capture_output=True,
                                   text=True, timeout=timeout)
@@ -32,8 +41,9 @@ def run_checks(solution_dir, checks, timeout: int = 120) -> list[CheckResult]:
             detail = "" if passed else ((proc.stdout or "") + (proc.stderr or ""))[:800]
         except subprocess.TimeoutExpired:
             passed, detail = False, "check timed out"
-        except FileNotFoundError:
-            passed, detail = False, f"command not found: {command[0] if command else ''}"
+        except OSError as e:
+            # missing tool, non-executable file, path is a directory, etc.
+            passed, detail = False, f"could not run {command[0]!r}: {e}"
         results.append(CheckResult(name=name, passed=passed, detail=detail))
     return results
 

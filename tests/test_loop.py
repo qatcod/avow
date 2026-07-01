@@ -436,3 +436,23 @@ def test_loop_no_checks_unchanged(tmp_path):
     cfg = RunConfig(max_iterations=5, holdout_fraction=0.0)   # checks=[] default
     r = solve(_goal(tmp_path), cfg, StubExaminer(), FlakyBuilder(), now=lambda: 0.0)
     assert r.success is True
+
+
+class _EmptySuiteExaminer(Examiner):
+    """Produces a frozen suite that collects zero tests."""
+    def __init__(self):
+        pass
+
+    def write_tests(self, goal):
+        suite = TestSuite(test_plan="none", tests=[
+            TestFile(path="test_none.py", content="# a suite that collects no tests\n")])
+        return ExaminerResult(suite=suite, input_tokens=0, output_tokens=0)
+
+
+def test_loop_checks_cannot_green_zero_test_suite(tmp_path):
+    # A zero-test suite is never verified. Passing checks must NOT manufacture a
+    # green out of it — "no tests = not verified" is the guard checks must respect.
+    cfg = RunConfig(max_iterations=2, holdout_fraction=0.0,
+                    checks=[{"name": "ok", "command": ["python", "-c", "import sys; sys.exit(0)"]}])
+    r = solve(_goal(tmp_path), cfg, _EmptySuiteExaminer(), FlakyBuilder(), now=lambda: 0.0)
+    assert r.success is False

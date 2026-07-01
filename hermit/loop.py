@@ -155,10 +155,11 @@ def solve(
         outcome = builder.attempt(workspace.solution_dir, attempt_goal, best_failures)
         budget.charge_usd(outcome.cost_usd)
 
-        result = runner.run()
+        test_result = runner.run()
+        result = test_result
         if config.checks:
             result = combine_checks(
-                result,
+                test_result,
                 run_checks(workspace.solution_dir, config.checks, config.test_timeout_seconds),
             )
 
@@ -184,7 +185,12 @@ def solve(
         else:
             rounds_without_improvement += 1
 
-        if result.is_green:
+        # Checks fold into the grade, but they must never manufacture a green on a
+        # suite that collected zero tests: "no tests = not verified" is the guard
+        # that keeps an empty/broken suite from passing on passing checks alone.
+        # (With checks == [], result is test_result and this reduces to the old
+        # `result.is_green`, since is_green already requires total > 0.)
+        if result.is_green and test_result.total > 0:
             holdout_score = _holdout_score(holdout, best_dir, config)
             mscore: float | None = None
             surv = 0
