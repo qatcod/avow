@@ -253,6 +253,22 @@ def _cmd_adjudicate(args) -> int:
     return 0
 
 
+def _cmd_check(args) -> int:
+    from hermit.checks import run_checks
+
+    config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
+    if not config.checks:
+        print("no checks configured (add a `checks:` list to your config)")
+        return 0
+    results = run_checks(Path(args.solution_dir), config.checks, config.test_timeout_seconds)
+    for c in results:
+        line = f"  {c.name}: {'PASS' if c.passed else 'FAIL'}"
+        if not c.passed and c.detail:
+            line += f"  — {c.detail.strip().splitlines()[0][:140]}"
+        print(line)
+    return 0 if all(c.passed for c in results) else 2
+
+
 def build_examiner(config: RunConfig) -> Examiner:
     import anthropic  # imported lazily so unit tests don't need network/creds
     return Examiner(anthropic.Anthropic(), model=config.examiner_model)
@@ -326,6 +342,10 @@ def main(argv: list[str] | None = None) -> int:
     adj_p.add_argument("tests_dir")
     adj_p.add_argument("goal_file")
     adj_p.add_argument("--config", default=None)
+    check_p = sub.add_parser(
+        "check", help="run the configured verifier checks (lint/typecheck/audit/...) on a solution")
+    check_p.add_argument("solution_dir")
+    check_p.add_argument("--config", default=None)
     args = parser.parse_args(argv)
 
     if args.command == "mutate":
@@ -357,6 +377,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "adjudicate":
         return _cmd_adjudicate(args)
+
+    if args.command == "check":
+        return _cmd_check(args)
 
     goal_dir = Path(args.goal_dir)
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()

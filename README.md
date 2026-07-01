@@ -53,8 +53,21 @@ hermit propertize <goal.md> <out-dir>         # generate Hypothesis property tes
 hermit oracle <solution-dir> <goal.md>        # differential-test a solution against an independent reference impl
 hermit supervise <run.jsonl> <goal.md>        # review a recorded run's trajectory; the Supervisor recommends continue/redirect/escalate
 hermit adjudicate <solution> <tests> <goal.md> # a stalled build: decide BY EXECUTION which failing tests are the Examiner's bug (run them vs K independent references)
+hermit check <solution-dir>                    # run the configured verifier checks (lint/typecheck/audit/...) on a solution
 hermit verify <solution> <tests> <goal.md>    # one calibrated confidence number for any artifact
 ```
+
+Beyond the pytest suite, a goal can require arbitrary **checks** — any command that exits 0 on pass (lint, typecheck, a security scan, a size/perf budget). Configure them in `hermit.yaml`:
+
+```yaml
+checks:
+  - name: lint
+    command: ["ruff", "check", "."]
+  - name: types
+    command: ["python", "-m", "mypy", "lib.py"]
+```
+
+During `hermit solve`, checks fold into the grade alongside the tests: the run is green only when the suite passes **and** every check exits 0, and a failing check feeds the Builder exactly like a failing test — so it iterates to fix lint/type/audit errors too. More verifier *types* → more product *types* Hermit can drive to perfect. `hermit check` runs them standalone. (Checks run on the solution dir, so they're a weaker anti-cheat than the hidden pytest suite — visible to a reviewer, not gameable in secret.)
 
 When a build stalls just short of green, `hermit adjudicate` answers *"is this failing test the solution's bug or the Examiner's?"* by generating K independent reference implementations and **running each failing test against all of them** — if the independent correct implementations also fail it, the test contradicts correctness (a `TEST BUG`); if they pass it, the solution is the outlier. The verdict is decided by execution, not by an LLM's opinion. It's advisory (never auto-edits a test) and available in-loop via the opt-in `adjudicate_enabled`.
 
