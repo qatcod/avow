@@ -415,3 +415,24 @@ def test_loop_adjudicator_off_by_default(tmp_path):
     cfg = RunConfig(max_iterations=3, holdout_fraction=0.0, plateau_patience=2)
     r = solve(_goal(tmp_path), cfg, StubExaminer(), FlakyBuilder(), now=lambda: 0.0)
     assert r.suspected_bad_tests == []   # disabled + no client -> never runs
+
+
+def test_loop_failing_check_gates_green(tmp_path):
+    cfg = RunConfig(max_iterations=3, holdout_fraction=0.0,
+                    checks=[{"name": "gate", "command": ["python", "-c", "import sys; sys.exit(1)"]}])
+    r = solve(_goal(tmp_path), cfg, StubExaminer(), FlakyBuilder(), now=lambda: 0.0)
+    # the solution passes the pytest suite, but the always-failing check gates green
+    assert r.success is False
+
+
+def test_loop_passing_check_stays_green(tmp_path):
+    cfg = RunConfig(max_iterations=5, holdout_fraction=0.0,
+                    checks=[{"name": "ok", "command": ["python", "-c", "import sys; sys.exit(0)"]}])
+    r = solve(_goal(tmp_path), cfg, StubExaminer(), FlakyBuilder(), now=lambda: 0.0)
+    assert r.success is True and r.reason == "green"
+
+
+def test_loop_no_checks_unchanged(tmp_path):
+    cfg = RunConfig(max_iterations=5, holdout_fraction=0.0)   # checks=[] default
+    r = solve(_goal(tmp_path), cfg, StubExaminer(), FlakyBuilder(), now=lambda: 0.0)
+    assert r.success is True

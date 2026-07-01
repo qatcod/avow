@@ -19,6 +19,7 @@ from hermit.properties import generate_property_tests
 from hermit.oracle import run_oracle_check, generate_oracle
 from hermit.supervisor import review_trajectory
 from hermit.adjudicator import adjudicate_failures
+from hermit.checks import run_checks, combine_checks
 
 
 @dataclass
@@ -155,6 +156,11 @@ def solve(
         budget.charge_usd(outcome.cost_usd)
 
         result = runner.run()
+        if config.checks:
+            result = combine_checks(
+                result,
+                run_checks(workspace.solution_dir, config.checks, config.test_timeout_seconds),
+            )
 
         rec = AttemptRecord(
             iteration=budget.iterations,
@@ -270,11 +276,15 @@ def solve(
             break
 
     suspected_bad_tests = []
+    # The adjudicator reasons only about real Examiner-authored tests; drop the
+    # `check::<name>` pseudo-nodeids that folded-in verifier checks contribute to
+    # best_failures (they aren't collectible pytest tests).
+    failing_test_nodeids = [f.nodeid for f in best_failures if not f.nodeid.startswith("check::")]
     if (config.adjudicate_enabled and adjudicator_client is not None
-            and have_best and best_score >= config.adjudicate_threshold and best_failures):
+            and have_best and best_score >= config.adjudicate_threshold and failing_test_nodeids):
         before = budget.spent_usd
         adj = adjudicate_failures(
-            goal, frozen, [f.nodeid for f in best_failures], adjudicator_client,
+            goal, frozen, failing_test_nodeids, adjudicator_client,
             config.adjudicate_model, config.test_command,
             k=config.adjudicate_references_k, timeout=config.test_timeout_seconds)
         budget.charge_tokens(config.adjudicate_model, adj.input_tokens, adj.output_tokens)
