@@ -220,6 +220,29 @@ def _cmd_supervise(args) -> int:
     return 0
 
 
+def _cmd_adjudicate(args) -> int:
+    import anthropic
+    from hermit.adjudicator import adjudicate_failures
+    from hermit.runner import Runner
+
+    config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
+    goal = Path(args.goal_file).read_text(encoding="utf-8")
+    result = Runner(Path(args.solution_dir), Path(args.tests_dir), config.test_command,
+                    timeout=config.test_timeout_seconds).run()
+    if not result.failures:
+        print("no failing tests — nothing to adjudicate")
+        return 0
+    failing = [f.nodeid for f in result.failures]
+    adj = adjudicate_failures(goal, Path(args.tests_dir), failing, anthropic.Anthropic(),
+                              config.adjudicate_model, config.test_command,
+                              k=config.adjudicate_references_k, timeout=config.test_timeout_seconds)
+    labels = {"test_bug": "TEST BUG", "solution_bug": "solution bug", "inconclusive": "inconclusive"}
+    for v in adj.verdicts:
+        print(f"  {v.test_id}: {labels[v.verdict]}  "
+              f"({v.references_failed}/{v.references_total} independent references also fail it)")
+    return 0
+
+
 def build_examiner(config: RunConfig) -> Examiner:
     import anthropic  # imported lazily so unit tests don't need network/creds
     return Examiner(anthropic.Anthropic(), model=config.examiner_model)
@@ -287,6 +310,12 @@ def main(argv: list[str] | None = None) -> int:
     sup_p.add_argument("run_jsonl")
     sup_p.add_argument("goal_file")
     sup_p.add_argument("--config", default=None)
+    adj_p = sub.add_parser("adjudicate",
+                           help="for a stalled build: decide (by execution) which failing tests are the Examiner's bug")
+    adj_p.add_argument("solution_dir")
+    adj_p.add_argument("tests_dir")
+    adj_p.add_argument("goal_file")
+    adj_p.add_argument("--config", default=None)
     args = parser.parse_args(argv)
 
     if args.command == "mutate":
@@ -315,6 +344,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "supervise":
         return _cmd_supervise(args)
+
+    if args.command == "adjudicate":
+        return _cmd_adjudicate(args)
 
     goal_dir = Path(args.goal_dir)
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
