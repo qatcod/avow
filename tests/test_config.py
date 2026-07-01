@@ -41,6 +41,7 @@ def test_defaults_are_sane():
     assert cfg.adjudicate_model == "claude-opus-4-8"
     assert cfg.adjudicate_threshold == 0.9
     assert cfg.adjudicate_references_k == 3
+    assert cfg.checks == []
     assert cfg.adversarial_rounds == 2
     assert cfg.population_size == 3
     assert cfg.max_parallel_candidates == 4
