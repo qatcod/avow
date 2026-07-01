@@ -18,6 +18,7 @@ from hermit.confidence import aggregate_confidence
 from hermit.properties import generate_property_tests
 from hermit.oracle import run_oracle_check, generate_oracle
 from hermit.supervisor import review_trajectory
+from hermit.adjudicator import adjudicate_failures
 
 
 @dataclass
@@ -33,6 +34,7 @@ class SolveResult:
     confidence: float | None = None
     confidence_breakdown: dict = field(default_factory=dict)
     oracle_agreement: float | None = None
+    suspected_bad_tests: list = field(default_factory=list)
 
 
 def _write_tests(dest: Path, tests: list[TestFile]) -> None:
@@ -59,6 +61,7 @@ def solve(
     property_client=None,
     oracle_client=None,
     supervisor_client=None,
+    adjudicator_client=None,
 ) -> SolveResult:
     goal_dir = Path(goal_dir)
     goal = (goal_dir / "goal.md").read_text()
@@ -266,9 +269,24 @@ def solve(
             reason = "max_iterations"
             break
 
+    suspected_bad_tests = []
+    if (config.adjudicate_enabled and adjudicator_client is not None
+            and have_best and best_score >= config.adjudicate_threshold and best_failures):
+        before = budget.spent_usd
+        adj = adjudicate_failures(
+            goal, frozen, [f.nodeid for f in best_failures], adjudicator_client,
+            config.adjudicate_model, config.test_command,
+            k=config.adjudicate_references_k, timeout=config.test_timeout_seconds)
+        budget.charge_tokens(config.adjudicate_model, adj.input_tokens, adj.output_tokens)
+        suspected_bad_tests = [v.test_id for v in adj.verdicts if v.verdict == "test_bug"]
+        log.record(AttemptRecord(
+            iteration=budget.iterations, score=best_score, is_green=False,
+            diff_summary=f"adjudicated {len(adj.verdicts)} failing test(s); suspected bad: {suspected_bad_tests}",
+            failing=suspected_bad_tests, plan="adjudicate", cost_usd=budget.spent_usd - before))
     return SolveResult(
         False, max(best_score, 0.0), budget.iterations, reason,
         best_dir if have_best else None, intent_score=intent_score,
+        suspected_bad_tests=suspected_bad_tests,
     )
 
 

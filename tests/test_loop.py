@@ -371,3 +371,47 @@ def test_loop_oracle_converge_target_off_by_default(tmp_path):
     r = solve(_goal(tmp_path), cfg, StubExaminer(), FlakyBuilder(), now=lambda: 0.0)
     assert r.success is True
     assert not (tmp_path / "tests_frozen" / "ref.py").exists()
+
+
+def test_loop_adjudicator_flags_examiner_bad_test(tmp_path):
+    from types import SimpleNamespace
+    from hermit.oracle import _OraclePair
+
+    class BadTestExaminer:
+        def write_tests(self, goal):
+            return ExaminerResult(suite=TestSuite(test_plan="add", tests=[
+                TestFile(path="test_add.py", content="from lib import add\ndef test_add():\n    assert add(2, 3) == 5\n"),
+                TestFile(path="test_bad.py", content="from lib import add\ndef test_bad():\n    assert add(2, 3) == 6\n"),
+            ]), input_tokens=0, output_tokens=0)
+
+    class CorrectBuilder:
+        def attempt(self, solution_dir, goal, failures):
+            from pathlib import Path as _P
+            from hermit.builder import BuilderOutcome
+            (_P(solution_dir) / "lib.py").write_text("def add(a, b):\n    return a + b\n")
+            return BuilderOutcome(plan="ok", cost_usd=0.0, raw={})
+
+    class RefClient:
+        @property
+        def messages(self):
+            return self
+
+        def parse(self, **kwargs):
+            return SimpleNamespace(
+                parsed_output=_OraclePair(reference_code="def add(a, b):\n    return a + b\n", diff_test_code="x"),
+                usage=SimpleNamespace(input_tokens=1, output_tokens=1))
+
+    cfg = RunConfig(max_iterations=3, holdout_fraction=0.0,
+                    adjudicate_enabled=True, adjudicate_threshold=0.4, adjudicate_references_k=2)
+    r = solve(_goal(tmp_path), cfg, BadTestExaminer(), CorrectBuilder(), now=lambda: 0.0,
+              adjudicator_client=RefClient())
+    # the correct a+b solution can't pass the contradictory test_bad -> never green
+    assert r.success is False
+    # ...but the adjudicator ran a reference and flagged test_bad as the Examiner's bug:
+    assert any("test_bad" in t for t in r.suspected_bad_tests)
+
+
+def test_loop_adjudicator_off_by_default(tmp_path):
+    cfg = RunConfig(max_iterations=3, holdout_fraction=0.0, plateau_patience=2)
+    r = solve(_goal(tmp_path), cfg, StubExaminer(), FlakyBuilder(), now=lambda: 0.0)
+    assert r.suspected_bad_tests == []   # disabled + no client -> never runs
