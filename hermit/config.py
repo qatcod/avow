@@ -39,6 +39,10 @@ class RunConfig(BaseModel):
     oracle_model: str = "claude-opus-4-8"
     oracle_floor: float = 1.0
     oracle_converge_target: bool = False
+    adjudicate_enabled: bool = False
+    adjudicate_model: str = "claude-opus-4-8"
+    adjudicate_threshold: float = 0.9
+    adjudicate_references_k: int = 3
     adversarial_rounds: int = 2
     population_size: int = 3
     max_parallel_candidates: int = 4
