@@ -80,6 +80,12 @@ def improve(goal_dir, config, examiner, builder, *, ideator_client=None, escalat
             # A check-idea widens the verifier menu: it becomes a standing gate in
             # config.checks (enforced from this round on), not a bespoke test. An
             # empty command is not actionable — stop expanding.
+            #
+            # Trust note: check_command is LLM-authored and executed by run_checks,
+            # the SAME untrusted-code-execution boundary as the Builder (which already
+            # runs LLM-written code). The leash (objective + low-risk) gates the idea's
+            # SCOPE/RISK, not the command's capability; run it only where you'd run the
+            # Builder. A tool allowlist for auto-pursued check-ideas is a future guard.
             if not chosen.check_command:
                 break
             config.checks = list(config.checks) + [

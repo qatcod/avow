@@ -131,3 +131,76 @@ def test_strip_config_on_still_sees_solution_code(tmp_path):
     reads = ["python", "-c", "import sys; sys.exit(0 if 'VALUE = 7' in open('lib.py').read() else 1)"]
     r = run_checks(tmp_path, [{"name": "x", "command": reads}], strip_config=True)
     assert r[0].passed is True
+
+
+def test_strip_config_removes_nested_config(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "ruff.toml").write_text("# nested builder config\n")
+    sees = ["python", "-c", "import os,sys; sys.exit(0 if os.path.exists('src/ruff.toml') else 1)"]
+    r = run_checks(tmp_path, [{"name": "x", "command": sees}], strip_config=True)
+    assert r[0].passed is False   # nested config is stripped too
+
+
+def test_strip_config_survives_broken_symlink(tmp_path):
+    (tmp_path / "dangling").symlink_to(tmp_path / "does_not_exist")
+    r = run_checks(tmp_path, [{"name": "x", "command": ["python", "-c", "import sys; sys.exit(0)"]}],
+                   strip_config=True)
+    assert r[0].passed is True    # a broken symlink must not crash the sandbox build
+
+
+# --- review hardening: metric edge cases ----------------------------------
+
+def test_metric_string_bound_is_coerced(tmp_path):
+    r = run_checks(tmp_path, [{"name": "m", "command": ["python", "-c", "print(640)"], "max": "500"}])
+    assert r[0].passed is False and "max 500" in r[0].detail   # "500" coerced, 640 > 500
+
+
+def test_metric_nonnumeric_bound_is_misconfig_not_crash(tmp_path):
+    r = run_checks(tmp_path, [{"name": "m", "command": ["python", "-c", "print(5)"], "max": "abc"}])
+    assert r[0].passed is False and "misconfigured" in r[0].detail
+
+
+def test_metric_pattern_optional_group_no_crash(tmp_path):
+    r = run_checks(tmp_path, [{"name": "m", "command": ["python", "-c", "print('foo')"],
+                               "pattern": r"(\d+)?foo", "max": 10}])
+    assert r[0].passed is False and "could not parse" in r[0].detail
+
+
+def test_metric_nonzero_exit_fails_even_with_number_in_output(tmp_path):
+    # a crashing command must not pass on a number in its traceback/stderr
+    cmd = ["python", "-c", "import sys; sys.stderr.write('boom 42'); sys.exit(1)"]
+    r = run_checks(tmp_path, [{"name": "m", "command": cmd, "max": 100}])
+    assert r[0].passed is False and "exited 1" in r[0].detail
+
+
+def test_metric_stdout_only_ignores_stderr_number(tmp_path):
+    cmd = ["python", "-c", "import sys; sys.stderr.write('999999\\n'); print(10)"]
+    r = run_checks(tmp_path, [{"name": "m", "command": cmd, "max": 100}])
+    assert r[0].passed is True   # parses stdout's 10, not stderr's 999999
+
+
+def test_metric_parses_thousands_separators(tmp_path):
+    cmd = ["python", "-c", "print('total 1,234,567 bytes')"]
+    r = run_checks(tmp_path, [{"name": "m", "command": cmd, "max": 500000}])
+    assert r[0].passed is False and "1234567" in r[0].detail   # 1.23M > 500k, not 567
+
+
+def test_metric_scientific_notation(tmp_path):
+    r = run_checks(tmp_path, [{"name": "m", "command": ["python", "-c", "print('size 1e6')"], "max": 500000}])
+    assert r[0].passed is False   # 1e6 == 1,000,000 > 500,000 (not 6)
+
+
+def test_metric_hyphenated_token_not_misread_as_negative(tmp_path):
+    # "utf-8" must not parse as -8 (which would trip any min or pass any max)
+    r = run_checks(tmp_path, [{"name": "m", "command": ["python", "-c", "print('encoding: utf-8')"], "min": 0}])
+    assert r[0].passed is False and "could not parse" in r[0].detail
+
+
+def test_metric_detail_no_scientific_notation(tmp_path):
+    r = run_checks(tmp_path, [{"name": "m", "command": ["python", "-c", "print(12345678)"], "max": 100}])
+    assert "12345678" in r[0].detail and "e+" not in r[0].detail
+
+
+def test_metric_present_but_null_bound_is_misconfig(tmp_path):
+    r = run_checks(tmp_path, [{"name": "m", "command": ["python", "-c", "print(5)"], "max": None}])
+    assert r[0].passed is False and "misconfigured" in r[0].detail

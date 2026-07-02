@@ -11,10 +11,10 @@ Goal of the batch: make the verifier *wider* (measure numbers, not just pass/fai
 Today a check passes iff its command exits 0. Many quality gates are really a **number vs a budget**: bundle size ≤ 500 KB, coverage ≥ 90 %, p95 latency ≤ 200 ms, cyclomatic complexity ≤ 10. Feature A adds that mode.
 
 **The model.** A check may carry `max` and/or `min` (numbers). If **either** is present, the check is a **metric check**:
-1. Run the command in the solution dir (exit code is *not* the pass signal here — measurement tools routinely exit 0).
-2. Parse a number from `stdout + stderr`: by default the **last** token matching `-?\d+(?:\.\d+)?`; an optional `pattern` (regex) overrides — if it has a capture group, group 1 is used, else the whole match.
-3. Pass iff `min ≤ value ≤ max` for whichever bound(s) are given.
-4. If the command errors (OSError/timeout) or **no number** can be parsed → **failed** check with an honest detail (`could not parse a metric from output`). Never a crash.
+1. Run the command; it must **succeed (exit 0)** — a non-zero exit is a **failed** check (a measurement that crashed cannot certify a budget). This also stops a crashing command's stderr traceback from supplying a false metric.
+2. Parse a number from **stdout only**: by default the **last** token matching a number (with thousands-separator and scientific-notation support, and without misreading hyphenated tokens like `utf-8` as negatives); an optional `pattern` (regex) overrides — if a capture group participated, group 1 is used, else the whole match. The default parser is best-effort; non-trivial output should use an explicit `pattern`.
+3. Pass iff `min ≤ value ≤ max` (inclusive) for whichever bound(s) are given. Bounds are coerced to float; a present-but-non-numeric bound (e.g. `max: "abc"`) or a metric check with no numeric bound is a **misconfigured** (failed) check.
+4. If the command errors (OSError/timeout), exits non-zero, or **no number** can be parsed → **failed** check with an honest detail. Never a crash.
 
 A check with neither `max` nor `min` is an **exit-code check** (unchanged from today).
 
@@ -39,8 +39,10 @@ The honest limitation of checks: they run on the solution dir and the Builder se
 
 **New setting:** `strip_check_config: bool = False` (dormant, like `adjudicate_enabled` / `supervisor_enabled`).
 
-**When enabled:** `run_checks` runs each check in an **ephemeral copy** of the solution dir (mirroring how `Runner` grades tests in a clean copy) with builder-authorable tool-config files removed before the command runs:
+**When enabled:** `run_checks` runs the checks in **one ephemeral copy** of the solution dir (shared by all checks in the call; mirroring how `Runner` grades tests in a clean copy) with builder-authorable tool-config files removed **at every depth** (nested `src/.ruff.toml` too) before the commands run:
 `.ruff.toml`, `ruff.toml`, `.flake8`, `setup.cfg`, `tox.ini`, `mypy.ini`, `.mypy.ini`, `.pylintrc`, `.isort.cfg`.
+
+The copy tolerates broken symlinks/special files; if the sandbox can't be built at all, **every check fails** (with a detail) rather than crashing the run — preserving the never-crash guarantee. The copy is per-run overhead, so keep the solution dir free of large artifacts when enabling this.
 
 **Deliberately NOT stripped:** `pyproject.toml` — it commonly carries real dependencies and `[tool.*]` a goal legitimately needs; blanket-removing it would break honest projects. This is a documented limitation: a Builder could still weaken a check via `[tool.ruff]` in `pyproject.toml`. Stripping just the `[tool.*]` tables from `pyproject.toml` is a noted future refinement.
 
@@ -60,7 +62,9 @@ The expand phase (`hermit improve`) currently has the **Ideator** propose next *
 - append `{"name": f"idea_e{round}", "command": chosen.check_command}` to `config.checks` (in-memory; enforced from the next converge round on) — **no Examiner call, no test written**;
 - re-solve (`write_tests=False`) so the new gate must now hold alongside the suite.
 
-A check-idea with an empty `check_command` is skipped (treated as no actionable idea). `kind == "test"` (the default) → existing behavior, untouched.
+A check-idea with an empty `check_command` is not actionable and stops expansion. `kind == "test"` (the default) → existing behavior, untouched.
+
+**Trust boundary (honest framing):** a check-idea's `check_command` is **LLM-authored and executed** by `run_checks` — the *same* untrusted-code-execution boundary Hermit already crosses when the Builder runs `claude`-generated code. The leash (objective + low-risk auto-pursue, else human escalation) governs the idea's **scope/risk**, not the command's **capability**; run `hermit improve` with check-proposals only where you would already trust the Builder. A tool allowlist for auto-pursued check-ideas is a noted future guard.
 
 ---
 
