@@ -46,3 +46,56 @@ def test_combine_checks_folds_into_result():
 def test_combine_checks_empty_returns_unchanged():
     base = TestResult(passed=1, failed=0, errors=0, total=1, failures=[])
     assert combine_checks(base, []) is base
+
+
+# --- Feature A: metric-threshold checks -----------------------------------
+
+def test_metric_check_under_max_passes(tmp_path):
+    r = run_checks(tmp_path, [{"name": "size", "command": ["python", "-c", "print(400)"], "max": 500}])
+    assert r[0].passed is True
+
+
+def test_metric_check_over_max_fails(tmp_path):
+    r = run_checks(tmp_path, [{"name": "size", "command": ["python", "-c", "print(640)"], "max": 500}])
+    assert r[0].passed is False and "> max 500" in r[0].detail
+
+
+def test_metric_check_under_min_fails(tmp_path):
+    r = run_checks(tmp_path, [{"name": "cov", "command": ["python", "-c", "print(85)"], "min": 90}])
+    assert r[0].passed is False and "< min 90" in r[0].detail
+
+
+def test_metric_check_both_bounds(tmp_path):
+    ok = run_checks(tmp_path, [{"name": "b", "command": ["python", "-c", "print(50)"], "min": 10, "max": 100}])
+    assert ok[0].passed is True
+    bad = run_checks(tmp_path, [{"name": "b", "command": ["python", "-c", "print(5)"], "min": 10, "max": 100}])
+    assert bad[0].passed is False
+
+
+def test_metric_check_uses_last_number_by_default(tmp_path):
+    # noisy output; the metric is the last numeric token
+    r = run_checks(tmp_path, [{"name": "m", "command": ["python", "-c", "print('scanned 3 files; total 420')"], "max": 500}])
+    assert r[0].passed is True
+
+
+def test_metric_check_pattern_with_capture_group(tmp_path):
+    r = run_checks(tmp_path, [{"name": "cov",
+                               "command": ["python", "-c", "print('coverage: 94.2% of 1000 lines')"],
+                               "pattern": r"coverage: ([\d.]+)%", "min": 90}])
+    assert r[0].passed is True
+
+
+def test_metric_check_unparseable_output_fails(tmp_path):
+    r = run_checks(tmp_path, [{"name": "m", "command": ["python", "-c", "print('no numbers here')"], "max": 10}])
+    assert r[0].passed is False and "could not parse" in r[0].detail
+
+
+def test_metric_check_missing_command_still_failed(tmp_path):
+    r = run_checks(tmp_path, [{"name": "m", "command": ["this_tool_does_not_exist_xyz"], "max": 10}])
+    assert r[0].passed is False
+
+
+def test_exit_code_check_unaffected_by_metric_path(tmp_path):
+    # no max/min -> still pure exit-code semantics
+    r = run_checks(tmp_path, [{"name": "e", "command": ["python", "-c", "print(999)"]}])
+    assert r[0].passed is True  # exits 0 regardless of the number printed

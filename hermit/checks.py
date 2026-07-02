@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,6 +13,42 @@ class CheckResult:
     name: str
     passed: bool
     detail: str
+
+
+_METRIC_NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
+
+
+def _parse_metric(text: str, pattern: str | None) -> float | None:
+    """Extract a numeric metric from command output. With ``pattern`` (a regex),
+    use capture group 1 if present else the whole match; otherwise the last
+    numeric token. Returns None when no number can be read."""
+    if pattern:
+        m = re.search(pattern, text)
+        if m is None:
+            return None
+        raw = m.group(1) if m.groups() else m.group(0)
+    else:
+        found = _METRIC_NUMBER.findall(text)
+        if not found:
+            return None
+        raw = found[-1]
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
+def _evaluate_metric(output: str, check) -> tuple[bool, str]:
+    value = _parse_metric(output, check.get("pattern"))
+    if value is None:
+        return False, "could not parse a metric from the check output"
+    lo, hi = check.get("min"), check.get("max")
+    reasons = []
+    if hi is not None and value > hi:
+        reasons.append(f"metric {value:g} > max {hi:g}")
+    if lo is not None and value < lo:
+        reasons.append(f"metric {value:g} < min {lo:g}")
+    return (not reasons), ("" if not reasons else "; ".join(reasons))
 
 
 def run_checks(solution_dir, checks, timeout: int = 120) -> list[CheckResult]:
@@ -37,13 +74,22 @@ def run_checks(solution_dir, checks, timeout: int = 120) -> list[CheckResult]:
         try:
             proc = subprocess.run(command, cwd=solution_dir, capture_output=True,
                                   text=True, timeout=timeout)
-            passed = proc.returncode == 0
-            detail = "" if passed else ((proc.stdout or "") + (proc.stderr or ""))[:800]
         except subprocess.TimeoutExpired:
-            passed, detail = False, "check timed out"
+            results.append(CheckResult(name=name, passed=False, detail="check timed out"))
+            continue
         except OSError as e:
             # missing tool, non-executable file, path is a directory, etc.
-            passed, detail = False, f"could not run {command[0]!r}: {e}"
+            results.append(CheckResult(name=name, passed=False,
+                                       detail=f"could not run {command[0]!r}: {e}"))
+            continue
+        output = (proc.stdout or "") + (proc.stderr or "")
+        if "max" in check or "min" in check:
+            # metric check: pass iff the parsed number is within the given bound(s)
+            passed, detail = _evaluate_metric(output, check)
+        else:
+            # exit-code check: pass iff the command exits 0
+            passed = proc.returncode == 0
+            detail = "" if passed else output[:800]
         results.append(CheckResult(name=name, passed=passed, detail=detail))
     return results
 
