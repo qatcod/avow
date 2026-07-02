@@ -99,3 +99,35 @@ def test_exit_code_check_unaffected_by_metric_path(tmp_path):
     # no max/min -> still pure exit-code semantics
     r = run_checks(tmp_path, [{"name": "e", "command": ["python", "-c", "print(999)"]}])
     assert r[0].passed is True  # exits 0 regardless of the number printed
+
+
+# --- Feature B: strip_check_config anti-cheat ------------------------------
+
+_SEES_RUFF = ["python", "-c", "import os,sys; sys.exit(0 if os.path.exists('ruff.toml') else 1)"]
+
+
+def test_strip_config_off_sees_builder_config(tmp_path):
+    (tmp_path / "ruff.toml").write_text("# builder-added config\n")
+    r = run_checks(tmp_path, [{"name": "lint", "command": _SEES_RUFF}])  # strip off (default)
+    assert r[0].passed is True   # the config file is visible -> exit 0
+
+
+def test_strip_config_on_removes_builder_config(tmp_path):
+    (tmp_path / "ruff.toml").write_text("# builder-added config\n")
+    r = run_checks(tmp_path, [{"name": "lint", "command": _SEES_RUFF}], strip_config=True)
+    assert r[0].passed is False  # config stripped in the sandbox -> exit 1
+
+
+def test_strip_config_preserves_pyproject(tmp_path):
+    (tmp_path / "pyproject.toml").write_text("[tool.ruff]\n")
+    sees = ["python", "-c", "import os,sys; sys.exit(0 if os.path.exists('pyproject.toml') else 1)"]
+    r = run_checks(tmp_path, [{"name": "x", "command": sees}], strip_config=True)
+    assert r[0].passed is True   # pyproject deliberately NOT stripped
+
+
+def test_strip_config_on_still_sees_solution_code(tmp_path):
+    # the solution code itself is copied into the sandbox, so checks that read it still work
+    (tmp_path / "lib.py").write_text("VALUE = 7\n")
+    reads = ["python", "-c", "import sys; sys.exit(0 if 'VALUE = 7' in open('lib.py').read() else 1)"]
+    r = run_checks(tmp_path, [{"name": "x", "command": reads}], strip_config=True)
+    assert r[0].passed is True

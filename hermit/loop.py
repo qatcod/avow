@@ -160,7 +160,8 @@ def solve(
         if config.checks:
             result = combine_checks(
                 test_result,
-                run_checks(workspace.solution_dir, config.checks, config.test_timeout_seconds),
+                run_checks(workspace.solution_dir, config.checks, config.test_timeout_seconds,
+                           strip_config=config.strip_check_config),
             )
 
         rec = AttemptRecord(

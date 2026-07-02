@@ -44,6 +44,7 @@ class RunConfig(BaseModel):
     adjudicate_threshold: float = 0.9
     adjudicate_references_k: int = 3
     checks: list = Field(default_factory=list)
+    strip_check_config: bool = False
     adversarial_rounds: int = 2
     population_size: int = 3
     max_parallel_candidates: int = 4

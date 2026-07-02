@@ -449,6 +449,25 @@ class _EmptySuiteExaminer(Examiner):
         return ExaminerResult(suite=suite, input_tokens=0, output_tokens=0)
 
 
+def test_loop_forwards_strip_check_config(tmp_path):
+    # The builder writes correct code AND plants a ruff.toml. The check passes only
+    # when ruff.toml is present. With strip on, the loop must run the check in a
+    # sandbox where the planted config is gone -> check fails -> never green.
+    class ConfigCheatBuilder:
+        def attempt(self, solution_dir, goal, failures):
+            from hermit.builder import BuilderOutcome
+            (Path(solution_dir) / "lib.py").write_text("def add(a, b):\n    return a + b\n")
+            (Path(solution_dir) / "ruff.toml").write_text("# silence the linter\n")
+            return BuilderOutcome(plan="cheat", cost_usd=0.0, raw={})
+
+    needs_cfg = {"name": "needs_cfg",
+                 "command": ["python", "-c", "import os,sys; sys.exit(0 if os.path.exists('ruff.toml') else 1)"]}
+    cfg = RunConfig(max_iterations=2, holdout_fraction=0.0, checks=[needs_cfg],
+                    strip_check_config=True)
+    r = solve(_goal(tmp_path), cfg, StubExaminer(), ConfigCheatBuilder(), now=lambda: 0.0)
+    assert r.success is False   # the builder's config is stripped -> check fails -> not green
+
+
 def test_loop_checks_cannot_green_zero_test_suite(tmp_path):
     # A zero-test suite is never verified. Passing checks must NOT manufacture a
     # green out of it — "no tests = not verified" is the guard checks must respect.

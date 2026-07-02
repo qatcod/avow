@@ -260,7 +260,8 @@ def _cmd_check(args) -> int:
     if not config.checks:
         print("no checks configured (add a `checks:` list to your config)")
         return 0
-    results = run_checks(Path(args.solution_dir), config.checks, config.test_timeout_seconds)
+    results = run_checks(Path(args.solution_dir), config.checks, config.test_timeout_seconds,
+                         strip_config=config.strip_check_config)
     for c in results:
         line = f"  {c.name}: {'PASS' if c.passed else 'FAIL'}"
         if not c.passed and c.detail:

@@ -42,6 +42,7 @@ def test_defaults_are_sane():
     assert cfg.adjudicate_threshold == 0.9
     assert cfg.adjudicate_references_k == 3
     assert cfg.checks == []
+    assert cfg.strip_check_config is False        # anti-cheat ships dormant
     assert cfg.adversarial_rounds == 2
     assert cfg.population_size == 3
     assert cfg.max_parallel_candidates == 4
