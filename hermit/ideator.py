@@ -8,6 +8,8 @@ class Idea(BaseModel):
     verifier: str
     objective: bool
     risk: str  # "low" | "high"
+    kind: str = "test"  # "test" (verified by a behavioral test) | "check" (a standing gate command)
+    check_command: list[str] = []  # for kind="check": the gate as command-line args
 
 
 class _IdeaSet(BaseModel):
@@ -23,9 +25,17 @@ exist, propose up to {n} concrete NEXT features or improvements — ranked best-
 - objective: true if the verifier is an objective pass/fail test (not a matter of taste).
 - risk: "low" if it is a safe, well-scoped addition; "high" if it is broad, ambiguous, \
 or could break existing behavior.
+- kind: "test" (the default) for a feature verified by a behavioral test, or "check" to \
+add a standing automated quality GATE that runs a shell command — a linter, a type \
+checker, or a size/complexity budget — instead of a bespoke test.
+- check_command: ONLY for kind="check" — the gate as a list of command-line args \
+(e.g. ["ruff", "check", "."] or ["python", "-m", "mypy", "lib.py"]); it passes iff the \
+command exits 0. Leave it empty for kind="test".
 
 Prefer improvements that are objectively verifiable and not already covered by the \
-existing tests. Do NOT propose things the tests already check.
+existing tests. Propose a "check" only when a standing gate fits better than a single \
+test (e.g. enforce style, types, or a budget across all future changes). Do NOT propose \
+things the tests already check.
 
 GOAL:
 {goal}

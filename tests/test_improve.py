@@ -60,6 +60,51 @@ def test_improve_without_ideator_reduces_to_solve(tmp_path: Path):
     assert r.success is True and r.expansions == 0 and len(r.rounds) == 1
 
 
+class CheckIdeatorClient:
+    """Proposes a check-kind idea: an automated gate (here, one that always fails)."""
+    @property
+    def messages(self):
+        return self
+
+    def parse(self, *, output_format, **kwargs):
+        po = _IdeaSet(ideas=[Idea(
+            description="enforce a lint gate", verifier="the linter exits 0",
+            objective=True, risk="low", kind="check",
+            check_command=["python", "-c", "import sys; sys.exit(1)"])])
+        return SimpleNamespace(parsed_output=po, usage=SimpleNamespace(input_tokens=1, output_tokens=1))
+
+
+def test_improve_ideator_proposes_check_appended_to_config(tmp_path: Path):
+    cfg = RunConfig(max_iterations=2, holdout_fraction=0.0, max_expand_rounds=1)
+    r = improve(_goal(tmp_path), cfg, StubExaminer(), StubBuilder(),
+                ideator_client=CheckIdeatorClient(), now=lambda: 0.0)
+    assert r.expansions == 1
+    # the check-idea was appended to config.checks (a standing gate), not written as a test
+    assert any(c["command"] == ["python", "-c", "import sys; sys.exit(1)"] for c in cfg.checks)
+    assert not (tmp_path / "tests_frozen" / "test_e1_add.py").exists()
+    # the always-failing gate makes the expand round non-green
+    assert r.rounds[-1].success is False
+
+
+class EmptyCheckIdeatorClient:
+    @property
+    def messages(self):
+        return self
+
+    def parse(self, *, output_format, **kwargs):
+        po = _IdeaSet(ideas=[Idea(description="x", verifier="y", objective=True, risk="low",
+                                  kind="check", check_command=[])])
+        return SimpleNamespace(parsed_output=po, usage=SimpleNamespace(input_tokens=1, output_tokens=1))
+
+
+def test_improve_check_idea_with_empty_command_is_skipped(tmp_path: Path):
+    cfg = RunConfig(max_iterations=2, holdout_fraction=0.0, max_expand_rounds=2)
+    r = improve(_goal(tmp_path), cfg, StubExaminer(), StubBuilder(),
+                ideator_client=EmptyCheckIdeatorClient(), now=lambda: 0.0)
+    assert r.expansions == 0        # a check-idea with no command is not actionable
+    assert cfg.checks == []
+
+
 def test_improve_preserves_last_known_good_on_failed_round(tmp_path):
     (tmp_path / "goal.md").write_text("Build add(a, b) returning a + b.")
 

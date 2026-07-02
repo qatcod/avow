@@ -76,10 +76,19 @@ def improve(goal_dir, config, examiner, builder, *, ideator_client=None, escalat
         chosen, _escalated = select_idea(ideas, escalate)
         if chosen is None:
             break
-        ex = examiner.write_tests(chosen.description)
-        visible, held = split_suite(ex.suite.tests, config.holdout_fraction)
-        _append_tests(frozen, visible, expansions + 1)
-        _append_tests(holdout, held, expansions + 1)
+        if getattr(chosen, "kind", "test") == "check":
+            # A check-idea widens the verifier menu: it becomes a standing gate in
+            # config.checks (enforced from this round on), not a bespoke test. An
+            # empty command is not actionable — stop expanding.
+            if not chosen.check_command:
+                break
+            config.checks = list(config.checks) + [
+                {"name": f"idea_e{expansions + 1}", "command": list(chosen.check_command)}]
+        else:
+            ex = examiner.write_tests(chosen.description)
+            visible, held = split_suite(ex.suite.tests, config.holdout_fraction)
+            _append_tests(frozen, visible, expansions + 1)
+            _append_tests(holdout, held, expansions + 1)
         result = solve(goal_dir, config, examiner, builder, now=now, write_tests=False,
                        mutation_client=mutation_client, intent_client=intent_client,
                        property_client=property_client, oracle_client=oracle_client)

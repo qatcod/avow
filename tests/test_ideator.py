@@ -41,3 +41,15 @@ def test_propose_ideas_returns_ideas_and_tokens():
 def test_propose_ideas_noop_without_client_or_count():
     assert propose_ideas("g", "t", None, "m", 3) == ([], 0, 0)
     assert propose_ideas("g", "t", object(), "m", 0) == ([], 0, 0)
+
+
+def test_idea_defaults_to_test_kind():
+    idea = Idea(description="d", verifier="v", objective=True, risk="low")
+    assert idea.kind == "test"
+    assert idea.check_command == []
+
+
+def test_idea_can_be_a_check():
+    idea = Idea(description="lint gate", verifier="ruff exits 0", objective=True, risk="low",
+                kind="check", check_command=["ruff", "check", "."])
+    assert idea.kind == "check" and idea.check_command == ["ruff", "check", "."]
