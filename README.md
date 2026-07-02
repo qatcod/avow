@@ -65,13 +65,23 @@ checks:
     command: ["ruff", "check", "."]
   - name: types
     command: ["python", "-m", "mypy", "lib.py"]
+  - name: bundle-size          # a metric check: pass iff the parsed number is within bounds
+    command: ["wc", "-c", "dist/app.js"]
+    max: 500000
+  - name: coverage
+    command: ["coverage", "report", "--format=total"]
+    min: 90
+strip_check_config: false      # opt-in anti-cheat (see below)
 ```
 
-During `hermit solve`, checks fold into the grade alongside the tests: the run is green only when the suite passes **and** every check exits 0, and a failing check feeds the Builder exactly like a failing test — so it iterates to fix lint/type/audit errors too. More verifier *types* → more product *types* Hermit can drive to perfect. `hermit check` runs them standalone. (Checks run on the solution dir, so they're a weaker anti-cheat than the hidden pytest suite — visible to a reviewer, not gameable in secret.)
+During `hermit solve`, checks fold into the grade alongside the tests: the run is green only when the suite passes **and** every check passes, and a failing check feeds the Builder exactly like a failing test — so it iterates to fix lint/type/budget errors too. More verifier *types* → more product *types* Hermit can drive to perfect. `hermit check` runs them standalone.
+
+- **Exit-code checks** pass iff the command exits 0. **Metric checks** (a check carrying `max` and/or `min`) parse a number from the command's output — the last numeric token by default, or a `pattern` regex — and pass iff it's within bounds. That covers size/coverage/latency/complexity budgets, not just pass/fail gates.
+- **Anti-cheat:** checks run on the solution dir, so by default they're a weaker anti-cheat than the hidden pytest suite (visible to a reviewer, but a Builder could loosen a check's own tool-config). Set `strip_check_config: true` to run each check in an ephemeral copy with builder-authorable config (`.ruff.toml`, `mypy.ini`, `.flake8`, …) stripped, so a check can't be silenced by loosened config. (`pyproject.toml` is deliberately preserved — it can hold real dependencies.)
 
 When a build stalls just short of green, `hermit adjudicate` answers *"is this failing test the solution's bug or the Examiner's?"* by generating K independent reference implementations and **running each failing test against all of them** — if the independent correct implementations also fail it, the test contradicts correctness (a `TEST BUG`); if they pass it, the solution is the outlier. The verdict is decided by execution, not by an LLM's opinion. It's advisory (never auto-edits a test) and available in-loop via the opt-in `adjudicate_enabled`.
 
-`hermit improve` runs the two-phase loop: converge on the goal, then an **Ideator** proposes the next feature (each with a verifier and a risk label), a **leash** auto-pursues objective low-risk ideas (and escalates the rest), the chosen idea's test joins the suite, and the loop re-converges — bounded by a round cap.
+`hermit improve` runs the two-phase loop: converge on the goal, then an **Ideator** proposes the next improvement (each with a verifier and a risk label), a **leash** auto-pursues objective low-risk ideas (and escalates the rest), the chosen idea joins the verifier — as a **test** the Examiner writes, or, when the idea is a standing quality **gate** (`kind: "check"`), as a new entry in `config.checks` — and the loop re-converges, bounded by a round cap. So Hermit widens its own verifier menu as it self-improves.
 
 A goal directory holds a `goal.md` (and, optionally, a `hermit.yaml` to tune budgets/weights). `hermit solve` writes the suite, runs the loop, and reports the verdict plus the confidence breakdown.
 
