@@ -26,6 +26,21 @@ _CMP_SWAP = {ast.Eq: ast.NotEq, ast.NotEq: ast.Eq, ast.Lt: ast.GtE,
 _BOOL_SWAP = {ast.And: ast.Or, ast.Or: ast.And}
 
 
+def _docstring_constant_ids(tree: ast.AST) -> set[int]:
+    """Ids of the Constant str nodes that are docstrings (module / function / class).
+    The mutator skips these: emptying a docstring never changes behavior, so it is an
+    equivalent mutant no test can kill — counting it would understate the true score."""
+    ids: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            body = getattr(node, "body", [])
+            if (body and isinstance(body[0], ast.Expr)
+                    and isinstance(body[0].value, ast.Constant)
+                    and isinstance(body[0].value.value, str)):
+                ids.add(id(body[0].value))
+    return ids
+
+
 class _Mutator(ast.NodeTransformer):
     """Applies exactly the `target`-th candidate mutation; with target=-1, only counts."""
 
@@ -33,6 +48,16 @@ class _Mutator(ast.NodeTransformer):
         self.target = target
         self.counter = 0
         self.description = ""
+        self._docstring_ids: set[int] = set()
+        self._collected = False
+
+    def visit(self, node):
+        # On first entry (the root) record docstring Constant nodes so they're never
+        # mutated — see _docstring_constant_ids.
+        if not self._collected:
+            self._collected = True
+            self._docstring_ids = _docstring_constant_ids(node)
+        return super().visit(node)
 
     def _hit(self, desc: str) -> bool:
         is_target = self.counter == self.target
@@ -64,6 +89,8 @@ class _Mutator(ast.NodeTransformer):
         return node
 
     def visit_Constant(self, node):
+        if id(node) in self._docstring_ids:
+            return node  # never mutate a docstring (equivalent mutant)
         v = node.value
         if isinstance(v, bool):
             if self._hit(f"Const {v}->{not v}"):

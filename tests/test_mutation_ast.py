@@ -30,3 +30,26 @@ def test_compare_bool_const_return_mutations():
 def test_empty_source_has_no_mutants():
     assert ast_mutants("x = 1\n")  # one Const mutant
     assert ast_mutants("pass\n") == []
+
+
+def test_docstrings_are_not_mutated():
+    # module + function docstrings are equivalent mutants (emptying them changes nothing);
+    # they must not produce str->empty mutants, but a REAL string constant still must.
+    src = ('"""module docstring"""\n'
+           'def f():\n'
+           '    """function docstring"""\n'
+           '    return "real"\n')
+    descs = [m.description for m in ast_mutants(src)]
+    # exactly one str->empty mutant, for the real "real" constant — not the two docstrings
+    assert descs.count("Const str->empty") == 1
+    assert any('""' in m.source and "real" not in m.source.split("return")[-1]
+               for m in ast_mutants(src) if m.description == "Const str->empty")
+    # the docstrings survive verbatim in that mutant's source
+    mutant = next(m for m in ast_mutants(src) if m.description == "Const str->empty")
+    assert "module docstring" in mutant.source and "function docstring" in mutant.source
+
+
+def test_class_docstring_not_mutated():
+    src = 'class C:\n    """class doc"""\n    x = "v"\n'
+    descs = [m.description for m in ast_mutants(src)]
+    assert descs.count("Const str->empty") == 1  # only x's "v", not the class docstring
