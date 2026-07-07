@@ -34,7 +34,8 @@ def _cmd_mutate(args) -> int:
     if result.survivors:
         print(f"\n{result.survived} survivors (potential test gaps):")
         for s in result.survivors:
-            print(f"  - [{s.origin}] {s.file}: {s.description}")
+            loc = f"{s.file}:{s.line}" if s.line else s.file
+            print(f"  - [{s.origin}] {loc}: {s.description}")
     return 0
 
 

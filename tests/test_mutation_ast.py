@@ -53,3 +53,16 @@ def test_class_docstring_not_mutated():
     src = 'class C:\n    """class doc"""\n    x = "v"\n'
     descs = [m.description for m in ast_mutants(src)]
     assert descs.count("Const str->empty") == 1  # only x's "v", not the class docstring
+
+
+def test_mutants_carry_source_line():
+    src = "def f(a, b):\n    return a + b\n"  # BinOp + Return both on line 2
+    binop = next(m for m in ast_mutants(src) if "BinOp" in m.description)
+    assert binop.line == 2
+
+
+def test_mutant_line_points_to_the_mutated_statement():
+    src = "x = 1\n\n\ndef f():\n    return 5\n"  # x=1 on line 1, `return 5` on line 5
+    muts = ast_mutants(src)
+    assert next(m for m in muts if m.description == "Const 1->2").line == 1
+    assert next(m for m in muts if "Return value->None" in m.description).line == 5

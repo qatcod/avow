@@ -17,6 +17,7 @@ class Mutant:
     source: str
     description: str
     origin: str  # "ast" | "llm"
+    line: int = 0  # 1-based source line of the mutated node (0 = unknown, e.g. LLM mutants)
 
 
 _BINOP_SWAP = {ast.Add: ast.Sub, ast.Sub: ast.Add, ast.Mult: ast.Div,
@@ -48,6 +49,7 @@ class _Mutator(ast.NodeTransformer):
         self.target = target
         self.counter = 0
         self.description = ""
+        self.lineno = 0
         self._docstring_ids: set[int] = set()
         self._collected = False
 
@@ -59,17 +61,18 @@ class _Mutator(ast.NodeTransformer):
             self._docstring_ids = _docstring_constant_ids(node)
         return super().visit(node)
 
-    def _hit(self, desc: str) -> bool:
+    def _hit(self, desc: str, node) -> bool:
         is_target = self.counter == self.target
         if is_target:
             self.description = desc
+            self.lineno = getattr(node, "lineno", 0)
         self.counter += 1
         return is_target
 
     def visit_BinOp(self, node):
         self.generic_visit(node)
         t = type(node.op)
-        if t in _BINOP_SWAP and self._hit(f"BinOp {t.__name__}->{_BINOP_SWAP[t].__name__}"):
+        if t in _BINOP_SWAP and self._hit(f"BinOp {t.__name__}->{_BINOP_SWAP[t].__name__}", node):
             node.op = _BINOP_SWAP[t]()
         return node
 
@@ -77,14 +80,14 @@ class _Mutator(ast.NodeTransformer):
         self.generic_visit(node)
         if node.ops:
             t = type(node.ops[0])
-            if t in _CMP_SWAP and self._hit(f"Compare {t.__name__}->{_CMP_SWAP[t].__name__}"):
+            if t in _CMP_SWAP and self._hit(f"Compare {t.__name__}->{_CMP_SWAP[t].__name__}", node):
                 node.ops[0] = _CMP_SWAP[t]()
         return node
 
     def visit_BoolOp(self, node):
         self.generic_visit(node)
         t = type(node.op)
-        if t in _BOOL_SWAP and self._hit(f"BoolOp {t.__name__}->{_BOOL_SWAP[t].__name__}"):
+        if t in _BOOL_SWAP and self._hit(f"BoolOp {t.__name__}->{_BOOL_SWAP[t].__name__}", node):
             node.op = _BOOL_SWAP[t]()
         return node
 
@@ -93,13 +96,13 @@ class _Mutator(ast.NodeTransformer):
             return node  # never mutate a docstring (equivalent mutant)
         v = node.value
         if isinstance(v, bool):
-            if self._hit(f"Const {v}->{not v}"):
+            if self._hit(f"Const {v}->{not v}", node):
                 return ast.copy_location(ast.Constant(not v), node)
         elif isinstance(v, int):
-            if self._hit(f"Const {v}->{v + 1}"):
+            if self._hit(f"Const {v}->{v + 1}", node):
                 return ast.copy_location(ast.Constant(v + 1), node)
         elif isinstance(v, str):
-            if self._hit("Const str->" + ("empty" if v else "nonempty")):
+            if self._hit("Const str->" + ("empty" if v else "nonempty"), node):
                 return ast.copy_location(ast.Constant("" if v else "hermit_mutant"), node)
         return node
 
@@ -108,7 +111,7 @@ class _Mutator(ast.NodeTransformer):
         if node.value is not None and not (
             isinstance(node.value, ast.Constant) and node.value.value is None
         ):
-            if self._hit("Return value->None"):
+            if self._hit("Return value->None", node):
                 node.value = ast.copy_location(ast.Constant(None), node)
         return node
 
@@ -121,7 +124,7 @@ def ast_mutants(source: str) -> list[Mutant]:
         m = _Mutator(i)
         tree = m.visit(ast.parse(source))
         ast.fix_missing_locations(tree)
-        out.append(Mutant(source=ast.unparse(tree), description=m.description, origin="ast"))
+        out.append(Mutant(source=ast.unparse(tree), description=m.description, origin="ast", line=m.lineno))
     return out
 
 
@@ -130,6 +133,7 @@ class Survivor:
     file: str
     description: str
     origin: str
+    line: int = 0  # 1-based source line of the surviving mutation (0 = unknown)
 
 
 @dataclass
@@ -204,7 +208,8 @@ def run_mutation_testing(
         if not result.is_green:
             killed += 1
         else:
-            survivors.append(Survivor(file=mod_name, description=mut.description, origin=mut.origin))
+            survivors.append(Survivor(file=mod_name, description=mut.description,
+                                      origin=mut.origin, line=mut.line))
 
     total = len(pool)
     score = 1.0 if total == 0 else killed / total
