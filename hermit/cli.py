@@ -271,6 +271,34 @@ def _cmd_check(args) -> int:
     return 0 if all(c.passed for c in results) else 2
 
 
+def _cmd_calibrate(args) -> int:
+    from hermit.calibration import run_calibration
+    from hermit.calibration_benchmark import DEFAULT_GOALS
+
+    config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
+    oracle_client = None
+    if args.llm:
+        import anthropic
+        oracle_client = anthropic.Anthropic()
+    report = run_calibration(DEFAULT_GOALS, config, oracle_client=oracle_client)
+    use_oracle = args.llm
+
+    print(f"{'goal':11} {'variant':17} {'green':6} {'conf':6} {'correct':8}")
+    for r in report.rows:
+        c = "-" if r.confidence is None else f"{r.confidence:.2f}"
+        print(f"{r.goal:11} {r.variant:17} {str(r.green):6} {c:6} {str(r.correct):8}")
+    print(f"\nreliability (green solutions bucketed by confidence"
+          f"{', oracle floor applied' if use_oracle else ''}):")
+    for (lo, hi), (corr, tot) in report.reliability(use_oracle=use_oracle):
+        if tot:
+            print(f"  conf [{lo:.2f},{hi:.2f}): {corr}/{tot} correct  ({corr / tot:.0%})")
+    fh, t = report.false_high_confidence(use_oracle=use_oracle)
+    kind = "with oracle floor" if use_oracle else "offline signals only (add --llm for the oracle)"
+    print(f"\nfalse-high-confidence: {fh}/{t} trusted solutions are actually WRONG "
+          f"({(fh / t * 100 if t else 0):.0f}%)  [{kind}]")
+    return 0
+
+
 def build_examiner(config: RunConfig) -> Examiner:
     import anthropic  # imported lazily so unit tests don't need network/creds
     return Examiner(anthropic.Anthropic(), model=config.examiner_model)
@@ -348,6 +376,11 @@ def main(argv: list[str] | None = None) -> int:
         "check", help="run the configured verifier checks (lint/typecheck/audit/...) on a solution")
     check_p.add_argument("solution_dir")
     check_p.add_argument("--config", default=None)
+    cal_p = sub.add_parser(
+        "calibrate", help="measure whether the verifier's confidence is trustworthy (reliability curve + false-high-confidence)")
+    cal_p.add_argument("--config", default=None)
+    cal_p.add_argument("--llm", action="store_true",
+                       help="also run the suite-independent reference oracle (needs ANTHROPIC_API_KEY)")
     args = parser.parse_args(argv)
 
     if args.command == "mutate":
@@ -382,6 +415,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "check":
         return _cmd_check(args)
+
+    if args.command == "calibrate":
+        return _cmd_calibrate(args)
 
     goal_dir = Path(args.goal_dir)
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
