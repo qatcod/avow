@@ -400,8 +400,15 @@ def main(argv: list[str] | None = None) -> int:
         import anthropic
         verify_client = anthropic.Anthropic()
     builder = Builder(model=config.builder_model, timeout=config.builder_timeout_seconds)
+    # The reference oracle is a SUITE-INDEPENDENT, execution-grounded signal: it differential-
+    # tests the solution against an independently generated implementation, so it catches
+    # green-but-wrong solutions whose bugs live in the test suite's blind spots — exactly the
+    # cases mutation/hold-out (both suite-derived) miss. Calibration showed those false-trusts
+    # dominate without it, so it runs by default here (opt out via oracle_enabled or --no-llm-verify).
+    oracle_client = verify_client if config.oracle_enabled else None
     result = solve(goal_dir, config, examiner, builder, write_tests=write_tests, confirm=confirm,
-                   intent_client=verify_client, property_client=verify_client)
+                   intent_client=verify_client, property_client=verify_client,
+                   oracle_client=oracle_client)
 
     if result.reason == "aborted":
         print("Aborted.")

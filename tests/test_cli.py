@@ -1,5 +1,39 @@
 from pathlib import Path
+from types import SimpleNamespace
 from hermit.cli import main
+
+
+def _stub_solve_captures(monkeypatch, tmp_path):
+    import hermit.cli as cli
+    monkeypatch.setattr(cli, "build_examiner", lambda cfg: object())
+    monkeypatch.setattr(cli, "Builder", lambda *a, **k: object())
+    import anthropic
+    monkeypatch.setattr(anthropic, "Anthropic", lambda *a, **k: "CLIENT")
+    captured = {}
+
+    def fake_solve(goal_dir, config, examiner, builder, **k):
+        captured.update(k)
+        return SimpleNamespace(reason="green", success=True, best_score=1.0, iterations=1,
+                               confidence=1.0, confidence_breakdown={}, best_dir=tmp_path)
+
+    monkeypatch.setattr(cli, "solve", fake_solve)
+    return captured
+
+
+def test_solve_wires_oracle_client_by_default(tmp_path: Path, monkeypatch):
+    (tmp_path / "goal.md").write_text("Build add(a, b).")
+    captured = _stub_solve_captures(monkeypatch, tmp_path)
+    assert main(["solve", str(tmp_path), "--yes"]) == 0
+    # the suite-independent oracle must run by default (it's the signal mutation/hold-out can't replace)
+    assert captured["oracle_client"] == "CLIENT"
+    assert captured["intent_client"] == "CLIENT"
+
+
+def test_solve_no_oracle_with_no_llm_verify(tmp_path: Path, monkeypatch):
+    (tmp_path / "goal.md").write_text("Build add(a, b).")
+    captured = _stub_solve_captures(monkeypatch, tmp_path)
+    assert main(["solve", str(tmp_path), "--yes", "--no-llm-verify"]) == 0
+    assert captured["oracle_client"] is None
 
 
 def test_cli_runs_with_injected_no_regenerate(tmp_path: Path, monkeypatch, capsys):

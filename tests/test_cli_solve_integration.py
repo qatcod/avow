@@ -4,6 +4,7 @@ import hermit.cli as cli
 from hermit.examiner import TestSuite, TestFile
 from hermit.properties import _PropertySet
 from hermit.backtranslation import _InferredGoal, IntentMatch
+from hermit.oracle import _OraclePair
 from hermit.builder import BuilderOutcome
 
 
@@ -25,6 +26,14 @@ class DispatchClient:
                          "def test_comm(a, b):\n    assert add(a, b) == add(b, a)\n"))])
         elif output_format is _InferredGoal:
             po = _InferredGoal(inferred_goal="add two integers")
+        elif output_format is _OraclePair:
+            # the suite-independent oracle: an independent (correct) reference + a diff test
+            po = _OraclePair(
+                reference_code="def add(a, b):\n    return a + b\n",
+                diff_test_code=("from lib import add as _sol\nfrom ref import add as _ref\n"
+                                "from hypothesis import given, strategies as st\n"
+                                "@given(st.integers(), st.integers())\n"
+                                "def test_diff(a, b):\n    assert _sol(a, b) == _ref(a, b)\n"))
         else:  # IntentMatch
             po = IntentMatch(score=0.9, divergences=[])
         return SimpleNamespace(parsed_output=po, usage=SimpleNamespace(input_tokens=1, output_tokens=1))
@@ -39,7 +48,7 @@ class StubBuilder:
         return BuilderOutcome(plan="ok", cost_usd=0.0, raw={})
 
 
-def test_hermit_solve_activates_intent_and_property(tmp_path, capsys, monkeypatch):
+def test_hermit_solve_activates_intent_property_and_oracle(tmp_path, capsys, monkeypatch):
     (tmp_path / "goal.md").write_text("Build add(a, b) returning a + b.")
     import anthropic
     monkeypatch.setattr(anthropic, "Anthropic", lambda *a, **k: DispatchClient())
@@ -49,6 +58,7 @@ def test_hermit_solve_activates_intent_and_property(tmp_path, capsys, monkeypatc
     out = capsys.readouterr().out
     # property test was generated INTO the frozen suite (the build had to satisfy it):
     assert (tmp_path / "tests_frozen" / "test_prop_comm.py").exists()
-    # confidence is surfaced and the run succeeded (intent 0.9 + mutation 1.0 + holdout 1.0):
+    # the run succeeded with all default LLM signals active — intent 0.9, mutation/holdout 1.0,
+    # AND the reference oracle (correct reference agrees, so it doesn't flag the correct solution):
     assert rc == 0
     assert "confidence:" in out
