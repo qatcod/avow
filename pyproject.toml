@@ -1,8 +1,22 @@
 [project]
 name = "hermit"
 version = "0.1.0"
-description = "Autonomous build-and-improve loop"
+description = "An autonomous build-and-verify loop that reports calibrated confidence in AI-generated code"
+readme = "README.md"
 requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "qatcod" }]
+keywords = ["ai", "code-generation", "testing", "mutation-testing", "verification", "llm", "calibration"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Quality Assurance",
+]
 dependencies = [
     "anthropic>=0.69",
     "hypothesis>=6.0",
@@ -12,6 +26,11 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "pytest-json-report>=1.5"]
+
+[project.urls]
+Homepage = "https://github.com/qatcod/hermit"
+Repository = "https://github.com/qatcod/hermit"
+Issues = "https://github.com/qatcod/hermit/issues"
 
 [project.scripts]
 hermit = "hermit.cli:main"
