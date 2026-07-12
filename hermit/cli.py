@@ -271,6 +271,33 @@ def _cmd_check(args) -> int:
     return 0 if all(c.passed for c in results) else 2
 
 
+def _cmd_report(args) -> int:
+    from collections import defaultdict
+    from hermit.report import run_report
+
+    config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
+    rep = run_report(Path(args.repo), config, max_ast_mutants=args.max_mutants)
+    print(f"repo: {args.repo}")
+    print(f"  source modules: {len(rep.source_files)}   test files: {len(rep.test_files)}")
+    if not rep.baseline_green:
+        print(f"  {rep.detail}")
+        return 1
+    print(f"  suite strength (mutation): {rep.score:.2f}  ({rep.killed}/{rep.total} mutants killed)")
+    if rep.survivors:
+        by_file = defaultdict(list)
+        for s in rep.survivors:
+            by_file[s.file].append(s)
+        print(f"\n  {len(rep.survivors)} surviving mutants — code changes NO test caught (candidate gaps):")
+        for f in sorted(by_file):
+            print(f"    {f}")
+            for s in by_file[f]:
+                loc = f"line {s.line}" if s.line else "?"
+                print(f"      {loc}: {s.description}")
+    else:
+        print("  no surviving mutants — the suite killed every fault Hermit injected")
+    return 0
+
+
 def _cmd_calibrate(args) -> int:
     from hermit.calibration import run_calibration
     from hermit.calibration_benchmark import DEFAULT_GOALS
@@ -381,6 +408,11 @@ def main(argv: list[str] | None = None) -> int:
     cal_p.add_argument("--config", default=None)
     cal_p.add_argument("--llm", action="store_true",
                        help="also run the suite-independent reference oracle (needs ANTHROPIC_API_KEY)")
+    report_p = sub.add_parser(
+        "report", help="point-and-go: auto-detect a repo's code + tests and mutation-score its suite (no goal/layout setup)")
+    report_p.add_argument("repo")
+    report_p.add_argument("--config", default=None)
+    report_p.add_argument("--max-mutants", type=int, default=None, dest="max_mutants")
     args = parser.parse_args(argv)
 
     if args.command == "mutate":
@@ -418,6 +450,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "calibrate":
         return _cmd_calibrate(args)
+
+    if args.command == "report":
+        return _cmd_report(args)
 
     goal_dir = Path(args.goal_dir)
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()

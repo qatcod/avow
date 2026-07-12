@@ -159,6 +159,7 @@ def run_mutation_testing(
     client=None,
     model=None,
     goal: str = "",
+    source_files=None,
 ) -> MutationResult:
     solution_dir = Path(solution_dir)
 
@@ -168,23 +169,29 @@ def run_mutation_testing(
     if not baseline.is_green:
         return MutationResult(0, 0, 0, 0.0, [], 0, 0, baseline_green=False)
 
-    modules = sorted(solution_dir.glob("*.py"))
+    # source_files (paths relative to solution_dir) lets callers target code nested in
+    # packages; default keeps the original top-level-only behavior. Files are tracked by
+    # their relative path so a mutant is written back to the correct nested file.
+    if source_files is not None:
+        targets = [(solution_dir / f, str(f)) for f in source_files]
+    else:
+        targets = [(m, m.name) for m in sorted(solution_dir.glob("*.py"))]
     pool: list[tuple[str, Mutant]] = []
-    for mod in modules:
+    for read_path, rel_name in targets:
         try:
-            src = mod.read_text(encoding="utf-8")
+            src = read_path.read_text(encoding="utf-8")
             ms = ast_mutants(src)
-        except (SyntaxError, ValueError, UnicodeDecodeError):
+        except (SyntaxError, ValueError, UnicodeDecodeError, OSError):
             continue  # skip modules we can't parse/decode (the tool runs on any repo)
         for m in ms:
-            pool.append((mod.name, m))
+            pool.append((rel_name, m))
     pool = pool[:max_ast_mutants]
 
     llm_input = llm_output = 0
     if llm_n and client is not None:
-        for mod in modules:
+        for read_path, rel_name in targets:
             try:
-                src = mod.read_text(encoding="utf-8")
+                src = read_path.read_text(encoding="utf-8")
             except (UnicodeDecodeError, OSError):
                 continue
             ms, i_tok, o_tok = llm_mutants(src, goal, client, model, llm_n)
@@ -195,7 +202,7 @@ def run_mutation_testing(
                     ast.parse(m.source)
                 except SyntaxError:
                     continue  # drop unparseable LLM mutants — they'd trivially "kill" and inflate the score
-                pool.append((mod.name, m))
+                pool.append((rel_name, m))
 
     killed = 0
     survivors: list[Survivor] = []

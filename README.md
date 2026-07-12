@@ -54,6 +54,7 @@ hermit oracle <solution-dir> <goal.md>        # differential-test a solution aga
 hermit supervise <run.jsonl> <goal.md>        # review a recorded run's trajectory; the Supervisor recommends continue/redirect/escalate
 hermit adjudicate <solution> <tests> <goal.md> # a stalled build: decide BY EXECUTION which failing tests are the Examiner's bug (run them vs K independent references)
 hermit check <solution-dir>                    # run the configured verifier checks (lint/typecheck/audit/...) on a solution
+hermit report <repo>                           # point-and-go: auto-detect a repo's code + tests and mutation-score its suite
 hermit calibrate [--llm]                       # measure whether the confidence number is trustworthy (reliability curve)
 hermit verify <solution> <tests> <goal.md>    # one calibrated confidence number for any artifact
 ```
@@ -83,6 +84,8 @@ During `hermit solve`, checks fold into the grade alongside the tests: the run i
 When a build stalls just short of green, `hermit adjudicate` answers *"is this failing test the solution's bug or the Examiner's?"* by generating K independent reference implementations and **running each failing test against all of them** — if the independent correct implementations also fail it, the test contradicts correctness (a `TEST BUG`); if they pass it, the solution is the outlier. The verdict is decided by execution, not by an LLM's opinion. It's advisory (never auto-edits a test) and available in-loop via the opt-in `adjudicate_enabled`.
 
 `hermit improve` runs the two-phase loop: converge on the goal, then an **Ideator** proposes the next improvement (each with a verifier and a risk label), a **leash** auto-pursues objective low-risk ideas (and escalates the rest), the chosen idea joins the verifier — as a **test** the Examiner writes, or, when the idea is a standing quality **gate** (`kind: "check"`), as a new entry in `config.checks` — and the loop re-converges, bounded by a round cap. So Hermit widens its own verifier menu as it self-improves.
+
+`hermit report <repo>` is the point-and-go entry point: aim it at an existing repository and it auto-detects the source modules (including code nested in packages) and the test suite, confirms the suite is green, mutation-tests the real code, and prints the suite-strength score with the surviving mutants pinned to `file:line` (the faults no test caught). No goal file, no flat-module layout, no configuration. If the suite isn't green on the unmutated repo (missing deps, fixtures), it says so plainly rather than reporting a meaningless number.
 
 `hermit calibrate` measures whether the confidence number can be *trusted*. It runs a labeled benchmark (goals with a correct reference, injected-bug variants, and an independent oracle for ground truth), scores every variant with the real verifier, and reports the reliability curve plus the **false-high-confidence rate** — the fraction of "trusted" solutions that are actually wrong. Run it whenever the confidence path changes. It's what proved that suite-derived signals alone (mutation + hold-out) miss green-but-wrong solutions whose bugs live in the suite's blind spots, and that folding in the suite-independent reference oracle drives false-high-confidence toward zero — which is why `hermit solve` runs the oracle by default.
 
