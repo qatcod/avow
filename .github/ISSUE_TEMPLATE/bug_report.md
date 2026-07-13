@@ -1,13 +1,13 @@
 ---
 name: Bug report
-about: Something in Hermit behaves incorrectly
+about: Something in Avow behaves incorrectly
 title: ""
 labels: bug
 ---
 
 **What happened**
 
-<!-- What you ran (the exact `hermit ...` command) and what went wrong. -->
+<!-- What you ran (the exact `avow ...` command) and what went wrong. -->
 
 **Expected**
 
@@ -19,6 +19,6 @@ labels: bug
 
 **Environment**
 
-- Hermit version / commit:
+- Avow version / commit:
 - Python version:
 - OS:

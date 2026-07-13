@@ -9,7 +9,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from hermit.scoring import parse_report
+from avow.scoring import parse_report
 
 
 class _OraclePair(BaseModel):
@@ -77,7 +77,7 @@ def run_oracle_check(solution_dir, goal, client, model, test_command, timeout: i
     if pair is None:
         return _inconclusive(in_tok, out_tok)
 
-    with tempfile.TemporaryDirectory(prefix="hermit-oracle-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="avow-oracle-") as tmp:
         work = Path(tmp)
         for p in Path(solution_dir).glob("*.py"):
             if p.name.startswith("test_") or p.name == "conftest.py":

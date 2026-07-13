@@ -1,19 +1,19 @@
-# Hermit — Verifier Checks — Implementation Plan
+# Avow — Verifier Checks — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development. Steps use checkbox (`- [ ]`) syntax.
 
 **Goal:** Add arbitrary verifier commands (`checks`) as first-class gates alongside the pytest suite — the solution is green only when the tests pass AND every check exits 0; check failures feed the Builder like test failures.
 
-**Architecture:** A new `hermit/checks.py` folds check outcomes into a combined `TestResult`, so the whole moat (score/green/feedback/confidence) works unchanged. One inserted line in the loop. Empty checks (default) → zero behavior change.
+**Architecture:** A new `avow/checks.py` folds check outcomes into a combined `TestResult`, so the whole moat (score/green/feedback/confidence) works unchanged. One inserted line in the loop. Empty checks (default) → zero behavior change.
 
-**Tech Stack:** Python 3.12 · stdlib `subprocess` · reuses `hermit.scoring`/`hermit.loop`/`hermit.config`.
+**Tech Stack:** Python 3.12 · stdlib `subprocess` · reuses `avow.scoring`/`avow.loop`/`avow.config`.
 
 ## Global Constraints
 
-- Python **3.11+** (Hermit-local venv at `/Users/qatadaha/Coding/hermit/.venv`, 3.12). Activate it for every command: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && <cmd>`.
+- Python **3.11+** (Avow-local venv at `/Users/qatadaha/Coding/avow/.venv`, 3.12). Activate it for every command: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && <cmd>`.
 - A check passes iff its command exits 0. `checks` is a list of `{name, command}` (command = list of strings). Default `[]` → no checks → unchanged behavior.
-- Reuses `TestResult(passed, failed, errors, total, failures)` (`score`/`is_green` are properties) and `FailureInfo(nodeid, message)` from `hermit.scoring` — do NOT modify scoring.
-- **UNTRACKED files must stay uncommitted:** `hermit/openrouter.py`, `tests/test_openrouter.py`. Use SPECIFIC `git add` per task; never `git add -A`.
+- Reuses `TestResult(passed, failed, errors, total, failures)` (`score`/`is_green` are properties) and `FailureInfo(nodeid, message)` from `avow.scoring` — do NOT modify scoring.
+- **UNTRACKED files must stay uncommitted:** `avow/openrouter.py`, `tests/test_openrouter.py`. Use SPECIFIC `git add` per task; never `git add -A`.
 - **No `git commit` without the user's explicit go-ahead** — each task ends with a prepared commit run when greenlit. Local commits only unless told to push.
 
 ---
@@ -21,8 +21,8 @@
 ### Task 1: `checks.py` — run + combine
 
 **Files:**
-- Create: `/Users/qatadaha/Coding/hermit/hermit/checks.py`
-- Test: `/Users/qatadaha/Coding/hermit/tests/test_checks.py`
+- Create: `/Users/qatadaha/Coding/avow/avow/checks.py`
+- Test: `/Users/qatadaha/Coding/avow/tests/test_checks.py`
 
 **Interfaces:**
 - Produces: `CheckResult(name: str, passed: bool, detail: str)`; `run_checks(solution_dir, checks, timeout=120) -> list[CheckResult]`; `combine_checks(result, check_results) -> TestResult`.
@@ -31,8 +31,8 @@
 
 ```python
 # tests/test_checks.py
-from hermit.checks import run_checks, combine_checks, CheckResult
-from hermit.scoring import TestResult
+from avow.checks import run_checks, combine_checks, CheckResult
+from avow.scoring import TestResult
 
 
 def test_run_checks_pass_and_fail(tmp_path):
@@ -65,20 +65,20 @@ def test_combine_checks_empty_returns_unchanged():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_checks.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'hermit.checks'`.
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_checks.py -q`
+Expected: FAIL — `ModuleNotFoundError: No module named 'avow.checks'`.
 
-- [ ] **Step 3: Write `hermit/checks.py`**
+- [ ] **Step 3: Write `avow/checks.py`**
 
 ```python
-# hermit/checks.py
+# avow/checks.py
 from __future__ import annotations
 
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from hermit.scoring import TestResult, FailureInfo
+from avow.scoring import TestResult, FailureInfo
 
 
 @dataclass
@@ -125,18 +125,18 @@ def combine_checks(result: TestResult, check_results) -> TestResult:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_checks.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_checks.py -q`
 Expected: PASS (4 passed).
 
 - [ ] **Step 5: Run the whole suite**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest -q`
 Expected: PASS, 0 warnings.
 
 - [ ] **Step 6: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/checks.py tests/test_checks.py && git commit -m "feat: verifier checks — run arbitrary commands + fold outcomes into the grade"
+cd /Users/qatadaha/Coding/avow && git add avow/checks.py tests/test_checks.py && git commit -m "feat: verifier checks — run arbitrary commands + fold outcomes into the grade"
 ```
 
 ---
@@ -144,8 +144,8 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/checks.py tests/test_checks.p
 ### Task 2: `RunConfig.checks`
 
 **Files:**
-- Modify: `/Users/qatadaha/Coding/hermit/hermit/config.py`
-- Modify: `/Users/qatadaha/Coding/hermit/tests/test_config.py`
+- Modify: `/Users/qatadaha/Coding/avow/avow/config.py`
+- Modify: `/Users/qatadaha/Coding/avow/tests/test_config.py`
 
 **Interfaces:**
 - `RunConfig` gains `checks: list = Field(default_factory=list)`.
@@ -160,10 +160,10 @@ Add to `tests/test_config.py::test_defaults_are_sane`:
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_config.py::test_defaults_are_sane -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_config.py::test_defaults_are_sane -q`
 Expected: FAIL — `AttributeError: ... 'checks'`.
 
-- [ ] **Step 3: Edit `hermit/config.py`**
+- [ ] **Step 3: Edit `avow/config.py`**
 
 Add after `adjudicate_references_k` (`Field` is already imported):
 
@@ -173,13 +173,13 @@ Add after `adjudicate_references_k` (`Field` is already imported):
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_config.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_config.py -q`
 Expected: PASS.
 
 - [ ] **Step 5: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/config.py tests/test_config.py && git commit -m "feat: checks setting on RunConfig (empty by default)"
+cd /Users/qatadaha/Coding/avow && git add avow/config.py tests/test_config.py && git commit -m "feat: checks setting on RunConfig (empty by default)"
 ```
 
 ---
@@ -187,20 +187,20 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/config.py tests/test_config.p
 ### Task 3: Loop — fold checks into the grade each iteration
 
 **Files:**
-- Modify: `/Users/qatadaha/Coding/hermit/hermit/loop.py`
-- Modify: `/Users/qatadaha/Coding/hermit/tests/test_loop.py`
+- Modify: `/Users/qatadaha/Coding/avow/avow/loop.py`
+- Modify: `/Users/qatadaha/Coding/avow/tests/test_loop.py`
 
 **Interfaces:**
-- No signature change. Imports `run_checks, combine_checks` from `hermit.checks`.
+- No signature change. Imports `run_checks, combine_checks` from `avow.checks`.
 
-**Edit (read `hermit/loop.py` to confirm the line first):**
+**Edit (read `avow/loop.py` to confirm the line first):**
 - Immediately AFTER `result = runner.run()`, insert:
   ```python
   if config.checks:
       result = combine_checks(result, run_checks(workspace.solution_dir, config.checks, config.test_timeout_seconds))
   ```
   Everything downstream (`result.score`, `result.is_green`, `result.failures`, `best_failures`) then reflects the checks with no other change.
-- Add `from hermit.checks import run_checks, combine_checks` near the top.
+- Add `from avow.checks import run_checks, combine_checks` near the top.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -230,48 +230,48 @@ def test_loop_no_checks_unchanged(tmp_path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_loop.py::test_loop_failing_check_gates_green -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_loop.py::test_loop_failing_check_gates_green -q`
 Expected: FAIL — the run goes green (checks not wired → the always-fail check is ignored).
 
-- [ ] **Step 3: Apply the edits to `hermit/loop.py`**
+- [ ] **Step 3: Apply the edits to `avow/loop.py`**
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_loop.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_loop.py -q`
 Expected: PASS — the three new tests + all existing loop tests (which use `checks=[]` → `combine_checks` returns the result unchanged → identical behavior).
 
 - [ ] **Step 5: Run the whole suite**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest -q`
 Expected: PASS, 0 warnings.
 
 - [ ] **Step 6: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/loop.py tests/test_loop.py && git commit -m "feat: fold verifier checks into the grade each iteration (checks gate green + feed the Builder)"
+cd /Users/qatadaha/Coding/avow && git add avow/loop.py tests/test_loop.py && git commit -m "feat: fold verifier checks into the grade each iteration (checks gate green + feed the Builder)"
 ```
 
 ---
 
-### Task 4: `hermit check` CLI
+### Task 4: `avow check` CLI
 
 **Files:**
-- Modify: `/Users/qatadaha/Coding/hermit/hermit/cli.py`
-- Test: `/Users/qatadaha/Coding/hermit/tests/test_cli_check.py`
+- Modify: `/Users/qatadaha/Coding/avow/avow/cli.py`
+- Test: `/Users/qatadaha/Coding/avow/tests/test_cli_check.py`
 
 **Interfaces:**
-- New subcommand: `hermit check <solution_dir> [--config forge.yaml]`. Runs the configured checks on the solution and prints each pass/fail; exit 0 if all pass, 2 otherwise. The existing subcommands are unchanged.
+- New subcommand: `avow check <solution_dir> [--config forge.yaml]`. Runs the configured checks on the solution and prints each pass/fail; exit 0 if all pass, 2 otherwise. The existing subcommands are unchanged.
 
 - [ ] **Step 1: Write the failing test**
 
 ```python
 # tests/test_cli_check.py
 from pathlib import Path
-import hermit.cli as cli
+import avow.cli as cli
 
 
 def test_check_cli(tmp_path, capsys):
-    cfg = tmp_path / "hermit.yaml"
+    cfg = tmp_path / "avow.yaml"
     cfg.write_text(
         'checks:\n'
         '  - name: ok\n'
@@ -295,10 +295,10 @@ def test_check_cli_no_checks(tmp_path, capsys):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_cli_check.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_cli_check.py -q`
 Expected: FAIL — argparse `invalid choice: 'check'`.
 
-- [ ] **Step 3: Edit `hermit/cli.py`**
+- [ ] **Step 3: Edit `avow/cli.py`**
 
 Add the subparser inside `main` (after the `adjudicate` subparser, before `parse_args`):
 
@@ -319,7 +319,7 @@ Add the handler at module level:
 
 ```python
 def _cmd_check(args) -> int:
-    from hermit.checks import run_checks
+    from avow.checks import run_checks
 
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
     if not config.checks:
@@ -336,25 +336,25 @@ def _cmd_check(args) -> int:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_cli_check.py tests/test_cli.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_cli_check.py tests/test_cli.py -q`
 Expected: PASS (check CLI + the unchanged subcommands).
 
 - [ ] **Step 5: Run the whole suite + smoke the entry point**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest -q && hermit --help`
-Expected: all tests PASS, 0 warnings; `hermit --help` lists `check` among the verbs.
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest -q && avow --help`
+Expected: all tests PASS, 0 warnings; `avow --help` lists `check` among the verbs.
 
 - [ ] **Step 6: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/cli.py tests/test_cli_check.py && git commit -m "feat: hermit check CLI — run the configured verifier checks on a solution"
+cd /Users/qatadaha/Coding/avow && git add avow/cli.py tests/test_cli_check.py && git commit -m "feat: avow check CLI — run the configured verifier checks on a solution"
 ```
 
 ---
 
 ## Manual validation (after Task 4)
 
-Write a `hermit.yaml` with `checks: [{name: lint, command: ["ruff", "check", "."]}, {name: types, command: ["python","-m","mypy","lib.py"]}]`, then `hermit solve <goal>` — the Builder must now produce code that passes the tests AND lints clean AND typechecks. `hermit check <solution>` reports the checks standalone.
+Write a `avow.yaml` with `checks: [{name: lint, command: ["ruff", "check", "."]}, {name: types, command: ["python","-m","mypy","lib.py"]}]`, then `avow solve <goal>` — the Builder must now produce code that passes the tests AND lints clean AND typechecks. `avow check <solution>` reports the checks standalone.
 
 ## What this deliberately does NOT do (later)
 

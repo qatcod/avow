@@ -1,8 +1,8 @@
-# Hermit — Widen & Harden the Check Subsystem — Design Spec
+# Avow — Widen & Harden the Check Subsystem — Design Spec
 
-**Status:** Approved (2026-07-02). Three incremental extensions to the Verifier Checks subsystem (shipped 2026-07-02, `origin/main` 9a09012). Each follows an established Hermit convention: risky behavior ships dormant behind an opt-in flag; new capability reuses an existing seam (the check-fold, the leash, the expand phase).
+**Status:** Approved (2026-07-02). Three incremental extensions to the Verifier Checks subsystem (shipped 2026-07-02, `origin/main` 9a09012). Each follows an established Avow convention: risky behavior ships dormant behind an opt-in flag; new capability reuses an existing seam (the check-fold, the leash, the expand phase).
 
-Goal of the batch: make the verifier *wider* (measure numbers, not just pass/fail), *harder to cheat* (strip builder-loosened config), and *self-extending* (the Ideator proposes new gates). This pushes Hermit further past "code-with-unit-tests" toward "drive any verifiable product to perfect."
+Goal of the batch: make the verifier *wider* (measure numbers, not just pass/fail), *harder to cheat* (strip builder-loosened config), and *self-extending* (the Ideator proposes new gates). This pushes Avow further past "code-with-unit-tests" toward "drive any verifiable product to perfect."
 
 ---
 
@@ -54,7 +54,7 @@ The copy tolerates broken symlinks/special files; if the sandbox can't be built 
 
 ## Feature C — Ideator proposes checks (self-extending verifier menu)
 
-The expand phase (`hermit improve`) currently has the **Ideator** propose next *features*, each verified by a **test** the Examiner writes. Feature C lets the Ideator also propose a **check** — a lint/typecheck/quality gate — so Hermit widens its *own* verifier menu as it self-improves.
+The expand phase (`avow improve`) currently has the **Ideator** propose next *features*, each verified by a **test** the Examiner writes. Feature C lets the Ideator also propose a **check** — a lint/typecheck/quality gate — so Avow widens its *own* verifier menu as it self-improves.
 
 **Schema:** `Idea` gains `kind: str = "test"` (values `"test" | "check"`) and `check_command: list[str] = []`. The Ideator prompt is extended: it may propose `kind="check"` with a `check_command` (args list) for an automated gate not worth a bespoke test (style, types, a size/complexity budget). A check-idea is **objective** by nature (a command), so the existing **leash** (`select_idea`: auto-pursue objective + low-risk) handles it unchanged.
 
@@ -64,7 +64,7 @@ The expand phase (`hermit improve`) currently has the **Ideator** propose next *
 
 A check-idea with an empty `check_command` is not actionable and stops expansion. `kind == "test"` (the default) → existing behavior, untouched.
 
-**Trust boundary (honest framing):** a check-idea's `check_command` is **LLM-authored and executed** by `run_checks` — the *same* untrusted-code-execution boundary Hermit already crosses when the Builder runs `claude`-generated code. The leash (objective + low-risk auto-pursue, else human escalation) governs the idea's **scope/risk**, not the command's **capability**; run `hermit improve` with check-proposals only where you would already trust the Builder. A tool allowlist for auto-pursued check-ideas is a noted future guard.
+**Trust boundary (honest framing):** a check-idea's `check_command` is **LLM-authored and executed** by `run_checks` — the *same* untrusted-code-execution boundary Avow already crosses when the Builder runs `claude`-generated code. The leash (objective + low-risk auto-pursue, else human escalation) governs the idea's **scope/risk**, not the command's **capability**; run `avow improve` with check-proposals only where you would already trust the Builder. A tool allowlist for auto-pursued check-ideas is a noted future guard.
 
 ---
 

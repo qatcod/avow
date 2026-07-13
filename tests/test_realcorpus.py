@@ -1,9 +1,9 @@
 import importlib.util
 from pathlib import Path
 
-from hermit.realcorpus import build_real_corpus
-from hermit.calibration import CalibrationReport
-from hermit.config import RunConfig
+from avow.realcorpus import build_real_corpus
+from avow.calibration import CalibrationReport
+from avow.config import RunConfig
 
 # a function with a branch the suite never exercises (x > 100), so mutants there survive
 _SRC = "def f(x):\n    if x > 100:\n        return 0\n    return x * 2\n"

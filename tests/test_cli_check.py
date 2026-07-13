@@ -1,8 +1,8 @@
-import hermit.cli as cli
+import avow.cli as cli
 
 
 def test_check_cli(tmp_path, capsys):
-    cfg = tmp_path / "hermit.yaml"
+    cfg = tmp_path / "avow.yaml"
     cfg.write_text(
         'checks:\n'
         '  - name: ok\n'

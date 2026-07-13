@@ -1,10 +1,10 @@
-# Hermit v3 — The Expand Phase (Ideator + Self-Improvement Loop) — Design Spec
+# Avow v3 — The Expand Phase (Ideator + Self-Improvement Loop) — Design Spec
 
-**Status:** Approved (derives from the original [Hermit design spec](2026-06-26-hermit-design.md) — the converge/expand two-phase loop, the Ideator, and the leash were designed and approved at the start; this implements that part now that the verification moat is built).
+**Status:** Approved (derives from the original [Avow design spec](2026-06-26-avow-design.md) — the converge/expand two-phase loop, the Ideator, and the leash were designed and approved at the start; this implements that part now that the verification moat is built).
 
 ## Goal
 
-Turn the one-shot converge loop into a **two-phase self-improving loop**. After Hermit converges (green + confidence) on the initial goal, an **Ideator** proposes its own next feature/improvement; the chosen idea is turned into a verifier (a test), folded into the suite, and the loop **re-converges**. Repeat until budget / round cap / "no valuable idea" / the leash stops it. This is the "think of an idea → build → fix → think of *another* idea → again and again" the project set out to do.
+Turn the one-shot converge loop into a **two-phase self-improving loop**. After Avow converges (green + confidence) on the initial goal, an **Ideator** proposes its own next feature/improvement; the chosen idea is turned into a verifier (a test), folded into the suite, and the loop **re-converges**. Repeat until budget / round cap / "no valuable idea" / the leash stops it. This is the "think of an idea → build → fix → think of *another* idea → again and again" the project set out to do.
 
 ## The two-phase loop
 
@@ -19,7 +19,7 @@ The suite is **frozen within a converge phase** (un-gameable) but **grows across
 
 ## Components
 
-`hermit/ideator.py`:
+`avow/ideator.py`:
 
 | Unit | Job |
 |---|---|
@@ -28,14 +28,14 @@ The suite is **frozen within a converge phase** (un-gameable) but **grows across
 | `propose_ideas(goal, current_tests, client, model, n) -> tuple[list[Idea], int, int]` | LLM reads the goal + what's already tested → up to `n` ranked next ideas + token usage; `([], 0, 0)` for `n<=0`/`client is None` |
 | `select_idea(ideas, escalate) -> tuple[Idea \| None, bool]` | **the leash** (pure): take the top idea; if `objective and risk == "low"` → auto-pursue `(idea, False)`; else call `escalate(idea)` — accepted → `(idea, True)`, rejected/no-callback → `(None, True)`. Empty list → `(None, False)`. |
 
-`hermit/improve.py`:
+`avow/improve.py`:
 
 | Unit | Job |
 |---|---|
 | `ImproveResult(success, expansions, rounds, final)` | overall verdict, number of expand rounds done, per-round `SolveResult`s, the final `SolveResult` |
 | `improve(goal_dir, config, examiner, builder, *, ideator_client=None, escalate=None, mutation_client=None, intent_client=None, property_client=None, now=time.monotonic) -> ImproveResult` | the orchestrator: initial `solve(write_tests=True)`; then while green and `expansions < config.max_expand_rounds` and `ideator_client`: `propose_ideas` → `select_idea` → (if chosen) `examiner.write_tests(idea.description)` → **append** those test files to `tests_frozen/` → `solve(write_tests=False)` (re-converge on the grown suite). Stops on not-green / round cap / no idea / leash reject. |
 
-`hermit improve <goal_dir> [--config] [--no-llm-verify]` CLI — the expand-phase entry point (builds the clients like `hermit solve`, runs `improve`).
+`avow improve <goal_dir> [--config] [--no-llm-verify]` CLI — the expand-phase entry point (builds the clients like `avow solve`, runs `improve`).
 
 ## Integration & reuse
 
@@ -50,9 +50,9 @@ The suite is **frozen within a converge phase** (un-gameable) but **grows across
 
 - **Budget is per-round** (each `solve()` keeps its own caps), bounded by `max_expand_rounds`. A single shared global budget across all rounds is a noted refinement (it would require threading an external budget into `solve()`); per-round caps + the round cap bound the total for v3. Cost is multiplicative: up to `max_expand_rounds + 1` full converges.
 - The Ideator can propose a **wrong or impossible** improvement; its verifier is then a test the builder can't satisfy → that converge round fails → the loop stops and reports it. Same risk class the moat already handles (a bad idea-test is caught by failing to converge + the human gate via the leash).
-- **No last-known-good rollback across a failed expand round.** All `solve()` calls share one `.hermit/best`; a failed expand round overwrites the prior round's green solution. `ImproveResult.success`/`rounds` report the failure honestly, but the earlier green artifact is not retained — a noted refinement.
+- **No last-known-good rollback across a failed expand round.** All `solve()` calls share one `.avow/best`; a failed expand round overwrites the prior round's green solution. `ImproveResult.success`/`rounds` report the failure honestly, but the earlier green artifact is not retained — a noted refinement.
 - **Idea-tests are not held out.** Appended idea-tests join `tests_frozen/` only (never `tests_holdout/`), so a new feature gets no overfit/hold-out coverage of its own; the round-0 hold-out still guards the base goal. (And mutation testing does cover the new idea-test each round.)
-- **The CLI leash halts rather than prompts.** `hermit improve` passes no `escalate` callback, so a high-risk / non-objective top idea routes to `(None, True)` → the loop stops (safe default: halt when unsure). An interactive human-prompt escalate (like `solve`'s confirm gate) is a noted refinement; the `improve()` API already accepts an `escalate` callback for programmatic use.
+- **The CLI leash halts rather than prompts.** `avow improve` passes no `escalate` callback, so a high-risk / non-objective top idea routes to `(None, True)` → the loop stops (safe default: halt when unsure). An interactive human-prompt escalate (like `solve`'s confirm gate) is a noted refinement; the `improve()` API already accepts an `escalate` callback for programmatic use.
 - `improve()`'s `escalate` is the **idea-leash** hook (receives an `Idea`); it is intentionally *not* `solve()`'s confidence-override `escalate` (different callback shape). A low-confidence converge therefore stops the expand loop rather than auto-overriding — the safer behavior for an autonomous loop.
 - The Supervisor (event-triggered trajectory guardian) and Population/Hybrid strategies remain future work — v3 is the converge/expand loop + the Ideator + the leash.
 
@@ -61,4 +61,4 @@ The suite is **frozen within a converge phase** (un-gameable) but **grows across
 - `propose_ideas`: fake client returning an `_IdeaSet` + usage → assert the ideas flow through, goal + current tests forwarded, tokens captured, `n<=0`/`None` no-op.
 - `select_idea`: pure — objective+low → auto (escalated False); high-risk → escalate(accept) → `(idea, True)`; high-risk → escalate(reject) → `(None, True)`; non-objective → escalate; empty → `(None, False)`.
 - `improve`: a fake `ideator_client` returning one low-risk objective idea on round 1 then `[]` → exactly 1 expansion; a `StubExaminer` writing a *satisfiable* test for the idea; `FlakyBuilder` converges; assert `expansions == 1`, the idea's test is appended to `tests_frozen/`, `success`. Plus: no `ideator_client` → 0 expansions, reduces to `solve()`.
-- CLI: offline (monkeypatched client + StubBuilder) → `hermit improve` runs and reports rounds.
+- CLI: offline (monkeypatched client + StubBuilder) → `avow improve` runs and reports rounds.

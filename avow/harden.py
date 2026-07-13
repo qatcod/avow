@@ -1,13 +1,13 @@
-# hermit/harden.py
+# avow/harden.py
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from hermit.loop import solve
-from hermit.examiner import split_suite
-from hermit.improve import _append_tests, _snapshot
+from avow.loop import solve
+from avow.examiner import split_suite
+from avow.improve import _append_tests, _snapshot
 
 
 @dataclass
@@ -36,8 +36,8 @@ def harden(goal_dir, config, examiner, builder, *, mutation_client=None, intent_
     goal = (goal_dir / "goal.md").read_text()
     frozen = goal_dir / "tests_frozen"
     holdout = goal_dir / "tests_holdout"
-    best_src = goal_dir / ".hermit" / "best"
-    lkg = goal_dir / ".hermit" / "best_good"
+    best_src = goal_dir / ".avow" / "best"
+    lkg = goal_dir / ".avow" / "best_good"
 
     result = solve(goal_dir, config, examiner, builder, now=now, write_tests=True,
                    mutation_client=mutation_client, intent_client=intent_client,

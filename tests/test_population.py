@@ -1,9 +1,9 @@
 # tests/test_population.py
 from pathlib import Path
-from hermit.config import RunConfig
-from hermit.population import population_solve, hybrid_solve, PopulationResult
-from hermit.examiner import ExaminerResult, TestSuite, TestFile
-from hermit.builder import BuilderOutcome
+from avow.config import RunConfig
+from avow.population import population_solve, hybrid_solve, PopulationResult
+from avow.examiner import ExaminerResult, TestSuite, TestFile
+from avow.builder import BuilderOutcome
 
 
 def _goal(tmp_path: Path) -> Path:
@@ -43,8 +43,8 @@ def test_population_runs_candidates_and_selects(tmp_path):
     assert r.success is True
     assert len(r.candidates) == 2
     assert r.winner_index in (0, 1)
-    assert (tmp_path / ".hermit" / "best" / "lib.py").exists()           # winner promoted
-    assert (tmp_path / ".hermit" / "candidates" / "1" / "tests_frozen").exists()  # candidate 1 staged with a suite copy
+    assert (tmp_path / ".avow" / "best" / "lib.py").exists()           # winner promoted
+    assert (tmp_path / ".avow" / "candidates" / "1" / "tests_frozen").exists()  # candidate 1 staged with a suite copy
 
 
 def test_population_size_one_is_single_solve(tmp_path):
@@ -71,9 +71,9 @@ def test_population_parallel_outcome_matches(tmp_path):
     assert r.success is True
     assert len(r.candidates) == 3
     assert [c.index for c in r.candidates] == [0, 1, 2]   # index order preserved (deterministic)
-    assert (tmp_path / ".hermit" / "best" / "lib.py").exists()
-    assert (tmp_path / ".hermit" / "candidates" / "1" / "tests_frozen").exists()
-    assert (tmp_path / ".hermit" / "candidates" / "2" / "tests_frozen").exists()
+    assert (tmp_path / ".avow" / "best" / "lib.py").exists()
+    assert (tmp_path / ".avow" / "candidates" / "1" / "tests_frozen").exists()
+    assert (tmp_path / ".avow" / "candidates" / "2" / "tests_frozen").exists()
 
 
 def test_population_sequential_when_max_parallel_one(tmp_path):
@@ -84,14 +84,14 @@ def test_population_sequential_when_max_parallel_one(tmp_path):
 
 def test_pool_tolerates_a_failing_candidate(tmp_path):
     from types import SimpleNamespace
-    from hermit.population import _run_candidate_pool, Candidate
+    from avow.population import _run_candidate_pool, Candidate
 
     (tmp_path / "goal.md").write_text("Build add(a, b).")
     (tmp_path / "tests_frozen").mkdir()
     (tmp_path / "tests_frozen" / "test_add.py").write_text(
         "from lib import add\ndef test_add():\n    assert add(2, 3) == 5\n")
     (tmp_path / "tests_holdout").mkdir()
-    best0 = tmp_path / ".hermit" / "best"
+    best0 = tmp_path / ".avow" / "best"
     best0.mkdir(parents=True)
     (best0 / "lib.py").write_text("def add(a, b):\n    return a + b\n")
     cand0 = Candidate(0, SimpleNamespace(success=True, confidence=1.0, best_score=1.0,

@@ -7,7 +7,7 @@ labels: enhancement
 
 **The problem**
 
-<!-- What are you trying to do that Hermit does not support today? -->
+<!-- What are you trying to do that Avow does not support today? -->
 
 **What you have in mind**
 
@@ -15,5 +15,5 @@ labels: enhancement
 
 **How it would be verified**
 
-<!-- Hermit's bar: how would we know it works? For a new confidence signal,
-how does it move the reliability curve (hermit calibrate)? -->
+<!-- Avow's bar: how would we know it works? For a new confidence signal,
+how does it move the reliability curve (avow calibrate)? -->

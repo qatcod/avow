@@ -1,5 +1,5 @@
-from hermit.calibration import CalibrationGoal, CalibrationRow, CalibrationReport, run_calibration
-from hermit.config import RunConfig
+from avow.calibration import CalibrationGoal, CalibrationRow, CalibrationReport, run_calibration
+from avow.config import RunConfig
 
 
 def _oracle_add(m):
@@ -48,8 +48,8 @@ def test_reliability_buckets_bin_by_confidence():
 
 
 def test_calibrate_cli_prints_report(monkeypatch, capsys):
-    import hermit.calibration as calmod
-    import hermit.cli as cli
+    import avow.calibration as calmod
+    import avow.cli as cli
     rep = CalibrationReport([
         CalibrationRow("g", "correct", True, 0.9, None, True),
         CalibrationRow("g", "wrong", True, 0.9, None, False),

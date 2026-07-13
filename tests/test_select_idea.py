@@ -1,4 +1,4 @@
-from hermit.ideator import select_idea, Idea
+from avow.ideator import select_idea, Idea
 
 
 def _idea(objective, risk):

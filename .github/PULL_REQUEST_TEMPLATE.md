@@ -15,7 +15,7 @@
 
 <!-- Delete this section if you did not touch the verifier / confidence signals. -->
 
-- [ ] Ran `hermit calibrate` before and after; effect on the reliability curve below:
+- [ ] Ran `avow calibrate` before and after; effect on the reliability curve below:
 
 ```
 before:

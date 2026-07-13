@@ -1,25 +1,25 @@
-# hermit/loop.py
+# avow/loop.py
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from hermit.budget import Budget
-from hermit.config import RunConfig
-from hermit.examiner import Examiner, TestFile, split_suite
-from hermit.memory import AttemptRecord, RunLog
-from hermit.backtranslation import run_intent_check
-from hermit.panel import panel_intent_check
-from hermit.mutation import run_mutation_testing
-from hermit.runner import Runner
-from hermit.workspace import Workspace
-from hermit.confidence import aggregate_confidence
-from hermit.properties import generate_property_tests
-from hermit.oracle import run_oracle_check, generate_oracle
-from hermit.supervisor import review_trajectory
-from hermit.adjudicator import adjudicate_failures
-from hermit.checks import run_checks, combine_checks
+from avow.budget import Budget
+from avow.config import RunConfig
+from avow.examiner import Examiner, TestFile, split_suite
+from avow.memory import AttemptRecord, RunLog
+from avow.backtranslation import run_intent_check
+from avow.panel import panel_intent_check
+from avow.mutation import run_mutation_testing
+from avow.runner import Runner
+from avow.workspace import Workspace
+from avow.confidence import aggregate_confidence
+from avow.properties import generate_property_tests
+from avow.oracle import run_oracle_check, generate_oracle
+from avow.supervisor import review_trajectory
+from avow.adjudicator import adjudicate_failures
+from avow.checks import run_checks, combine_checks
 
 
 @dataclass
@@ -67,10 +67,10 @@ def solve(
     goal_dir = Path(goal_dir)
     goal = (goal_dir / "goal.md").read_text()
 
-    hermit_dir = goal_dir / ".hermit"
+    avow_dir = goal_dir / ".avow"
     frozen = goal_dir / "tests_frozen"
     holdout = goal_dir / "tests_holdout"
-    best_dir = hermit_dir / "best"
+    best_dir = avow_dir / "best"
 
     budget = Budget(
         max_cost_usd=config.max_cost_usd,
@@ -112,7 +112,7 @@ def solve(
                     budget.charge_tokens(_m, _i, _o)
                 intent_score = pr.score
                 panel_agreement = pr.agreement
-                RunLog(hermit_dir / "run.jsonl").record(AttemptRecord(
+                RunLog(avow_dir / "run.jsonl").record(AttemptRecord(
                     iteration=0, score=0.0, is_green=False,
                     diff_summary=f"intent {pr.score:.2f} agreement {pr.agreement:.2f}; {len(pr.divergences)} divergences",
                     failing=pr.divergences, plan="panel intent: " + pr.inferred_goal[:160],
@@ -122,15 +122,15 @@ def solve(
                 ir = run_intent_check(goal, frozen, intent_client, config.backtranslation_model)
                 budget.charge_tokens(config.backtranslation_model, ir.input_tokens, ir.output_tokens)
                 intent_score = ir.score
-                RunLog(hermit_dir / "run.jsonl").record(AttemptRecord(
+                RunLog(avow_dir / "run.jsonl").record(AttemptRecord(
                     iteration=0, score=0.0, is_green=False,
                     diff_summary=f"intent match {ir.score:.2f}; {len(ir.divergences)} divergences",
                     failing=ir.divergences, plan="intent check: " + ir.inferred_goal[:160],
                     cost_usd=budget.spent_usd - before,
                 ))
 
-    log = RunLog(hermit_dir / "run.jsonl")
-    workspace = Workspace(hermit_dir / "ws")
+    log = RunLog(avow_dir / "run.jsonl")
+    workspace = Workspace(avow_dir / "ws")
     runner = Runner(workspace.solution_dir, frozen, config.test_command, timeout=config.test_timeout_seconds)
 
     best_score = -1.0

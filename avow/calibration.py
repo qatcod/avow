@@ -17,10 +17,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from hermit.runner import Runner
-from hermit.mutation import run_mutation_testing
-from hermit.confidence import aggregate_confidence
-from hermit.oracle import run_oracle_check
+from avow.runner import Runner
+from avow.mutation import run_mutation_testing
+from avow.confidence import aggregate_confidence
+from avow.oracle import run_oracle_check
 
 _BUCKETS = [(0.0, 0.5), (0.5, 0.7), (0.7, 0.85), (0.85, 1.01)]
 

@@ -7,7 +7,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from hermit.scoring import TestResult, FailureInfo
+from avow.scoring import TestResult, FailureInfo
 
 # Builder-authorable tool-config files that could silence a check (loosen a lint,
 # relax a type gate) without fixing the code. Stripped in the sandbox when
@@ -130,7 +130,7 @@ def run_checks(solution_dir, checks, timeout: int = 120,
     workdir = solution_dir
     if strip_config:
         try:
-            tmp_root = tempfile.mkdtemp(prefix="hermit-check-")
+            tmp_root = tempfile.mkdtemp(prefix="avow-check-")
             workdir = _strip_config_sandbox(solution_dir, tmp_root)
         except (OSError, shutil.Error) as e:
             if tmp_root is not None:

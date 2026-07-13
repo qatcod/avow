@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from hermit.backtranslation import judge_intent_match, IntentMatch
+from avow.backtranslation import judge_intent_match, IntentMatch
 
 
 class FakeMessages:

@@ -3,14 +3,14 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from hermit.builder import Builder
-from hermit.config import RunConfig
-from hermit.examiner import Examiner
-from hermit.loop import solve
+from avow.builder import Builder
+from avow.config import RunConfig
+from avow.examiner import Examiner
+from avow.loop import solve
 
 
 def _cmd_mutate(args) -> int:
-    from hermit.mutation import run_mutation_testing
+    from avow.mutation import run_mutation_testing
 
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
     client = model = None
@@ -41,7 +41,7 @@ def _cmd_mutate(args) -> int:
 
 def _cmd_intent_check(args) -> int:
     import anthropic
-    from hermit.backtranslation import run_intent_check
+    from avow.backtranslation import run_intent_check
 
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
     goal = Path(args.goal_file).read_text(encoding="utf-8")
@@ -58,9 +58,9 @@ def _cmd_intent_check(args) -> int:
 
 def _cmd_verify(args) -> int:
     import anthropic
-    from hermit.mutation import run_mutation_testing
-    from hermit.backtranslation import run_intent_check
-    from hermit.confidence import aggregate_confidence
+    from avow.mutation import run_mutation_testing
+    from avow.backtranslation import run_intent_check
+    from avow.confidence import aggregate_confidence
 
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
     client = anthropic.Anthropic()
@@ -97,7 +97,7 @@ def _cmd_verify(args) -> int:
 
 def _cmd_propertize(args) -> int:
     import anthropic
-    from hermit.properties import generate_property_tests
+    from avow.properties import generate_property_tests
 
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
     goal = Path(args.goal_file).read_text(encoding="utf-8")
@@ -115,7 +115,7 @@ def _cmd_propertize(args) -> int:
 
 
 def _cmd_improve(args) -> int:
-    from hermit.improve import improve
+    from avow.improve import improve
 
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
     examiner = build_examiner(config)
@@ -138,7 +138,7 @@ def _cmd_improve(args) -> int:
 
 def _cmd_oracle(args) -> int:
     import anthropic
-    from hermit.oracle import run_oracle_check
+    from avow.oracle import run_oracle_check
 
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
     goal = Path(args.goal_file).read_text(encoding="utf-8")
@@ -151,7 +151,7 @@ def _cmd_oracle(args) -> int:
 
 
 def _cmd_harden(args) -> int:
-    from hermit.harden import harden
+    from avow.harden import harden
 
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
     examiner = build_examiner(config)
@@ -173,7 +173,7 @@ def _cmd_harden(args) -> int:
 
 
 def _cmd_population(args) -> int:
-    from hermit.population import population_solve, hybrid_solve
+    from avow.population import population_solve, hybrid_solve
 
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
     examiner = build_examiner(config)
@@ -201,7 +201,7 @@ def _cmd_supervise(args) -> int:
     import json
     from types import SimpleNamespace
     import anthropic
-    from hermit.supervisor import review_trajectory
+    from avow.supervisor import review_trajectory
 
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
     goal = Path(args.goal_file).read_text(encoding="utf-8")
@@ -223,8 +223,8 @@ def _cmd_supervise(args) -> int:
 
 def _cmd_adjudicate(args) -> int:
     import anthropic
-    from hermit.adjudicator import adjudicate_failures
-    from hermit.runner import Runner
+    from avow.adjudicator import adjudicate_failures
+    from avow.runner import Runner
 
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
     goal = Path(args.goal_file).read_text(encoding="utf-8")
@@ -255,7 +255,7 @@ def _cmd_adjudicate(args) -> int:
 
 
 def _cmd_check(args) -> int:
-    from hermit.checks import run_checks
+    from avow.checks import run_checks
 
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
     if not config.checks:
@@ -273,7 +273,7 @@ def _cmd_check(args) -> int:
 
 def _cmd_report(args) -> int:
     from collections import defaultdict
-    from hermit.report import run_report
+    from avow.report import run_report
 
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
     rep = run_report(Path(args.repo), config, max_ast_mutants=args.max_mutants)
@@ -294,13 +294,13 @@ def _cmd_report(args) -> int:
                 loc = f"line {s.line}" if s.line else "?"
                 print(f"      {loc}: {s.description}")
     else:
-        print("  no surviving mutants — the suite killed every fault Hermit injected")
+        print("  no surviving mutants — the suite killed every fault Avow injected")
     return 0
 
 
 def _cmd_calibrate(args) -> int:
-    from hermit.calibration import run_calibration
-    from hermit.calibration_benchmark import DEFAULT_GOALS
+    from avow.calibration import run_calibration
+    from avow.calibration_benchmark import DEFAULT_GOALS
 
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
     oracle_client = None
@@ -332,7 +332,7 @@ def build_examiner(config: RunConfig) -> Examiner:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="hermit")
+    parser = argparse.ArgumentParser(prog="avow")
     sub = parser.add_subparsers(dest="command", required=True)
     solve_p = sub.add_parser("solve", help="run the build-and-improve loop on a goal dir")
     solve_p.add_argument("goal_dir")

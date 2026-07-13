@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 
-from hermit.loop import solve
-from hermit.improve import _snapshot
+from avow.loop import solve
+from avow.improve import _snapshot
 
 
 @dataclass
@@ -66,10 +66,10 @@ def _stage_candidate(goal_dir, cand_dir) -> None:
 
 
 def _solve_candidate(goal_dir, i, config, examiner, builder, clients, now) -> Candidate:
-    cand_dir = Path(goal_dir) / ".hermit" / "candidates" / str(i)
+    cand_dir = Path(goal_dir) / ".avow" / "candidates" / str(i)
     _stage_candidate(goal_dir, cand_dir)
     ri = solve(cand_dir, config, examiner, builder, now=now, write_tests=False, **clients)
-    return Candidate(i, ri, cand_dir / ".hermit" / "best")
+    return Candidate(i, ri, cand_dir / ".avow" / "best")
 
 
 def _run_candidate_pool(goal_dir, config, examiner, builder, candidates, clients, now) -> PopulationResult:
@@ -99,7 +99,7 @@ def _run_candidate_pool(goal_dir, config, examiner, builder, candidates, clients
 
     results = [c.result for c in candidates]
     winner = select_best(results)
-    dest = goal_dir / ".hermit" / "best"
+    dest = goal_dir / ".avow" / "best"
     if winner != 0:
         win_dir = candidates[winner].solution_dir
         if win_dir is not None and Path(win_dir).exists():
@@ -117,7 +117,7 @@ def population_solve(goal_dir, config, examiner, builder, *, mutation_client=Non
     clients = dict(mutation_client=mutation_client, intent_client=intent_client,
                    property_client=property_client, oracle_client=oracle_client)
     r0 = solve(goal_dir, config, examiner, builder, now=now, write_tests=True, **clients)
-    candidates = [Candidate(0, r0, goal_dir / ".hermit" / "best")]
+    candidates = [Candidate(0, r0, goal_dir / ".avow" / "best")]
     return _run_candidate_pool(goal_dir, config, examiner, builder, candidates, clients, now)
 
 
@@ -128,7 +128,7 @@ def hybrid_solve(goal_dir, config, examiner, builder, *, mutation_client=None,
     clients = dict(mutation_client=mutation_client, intent_client=intent_client,
                    property_client=property_client, oracle_client=oracle_client)
     r0 = solve(goal_dir, config, examiner, builder, now=now, write_tests=True, **clients)
-    candidates = [Candidate(0, r0, goal_dir / ".hermit" / "best")]
+    candidates = [Candidate(0, r0, goal_dir / ".avow" / "best")]
     if r0.success:
         return PopulationResult(success=True, best=r0, candidates=candidates, winner_index=0)
     return _run_candidate_pool(goal_dir, config, examiner, builder, candidates, clients, now)

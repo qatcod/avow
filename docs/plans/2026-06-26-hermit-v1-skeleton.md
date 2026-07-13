@@ -1,8 +1,8 @@
-# Hermit v1 (Skeleton) Implementation Plan
+# Avow v1 (Skeleton) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the smallest Hermit that closes the loop end-to-end: an Examiner agent writes a frozen acceptance-test suite from a goal, a Builder agent (headless `claude -p`) edits code in an isolated workspace until those tests pass, with a deterministic outer loop enforcing non-regression, budget caps, and stop conditions — all observable in a run log.
+**Goal:** Build the smallest Avow that closes the loop end-to-end: an Examiner agent writes a frozen acceptance-test suite from a goal, a Builder agent (headless `claude -p`) edits code in an isolated workspace until those tests pass, with a deterministic outer loop enforcing non-regression, budget caps, and stop conditions — all observable in a run log.
 
 **Architecture:** A deterministic Python outer loop drives two LLM agents through injectable interfaces. The Builder runs as a `claude -p --output-format json` subprocess in a snapshot-based workspace and never sees the tests. The Examiner uses the `anthropic` SDK's structured outputs to emit test files. Every LLM/subprocess boundary is injectable so the loop logic is fully unit-testable without network or tokens.
 
@@ -17,7 +17,7 @@
 - **Anti-cheat (load-bearing):** the Builder never sees or edits the tests. Test files live outside the Builder's workspace and are **restored fresh before every test run**.
 - **Hard budget cap** (cost USD / iterations / wall-clock) — the loop must be physically unable to run away.
 - Every LLM/subprocess call is behind an **injectable seam**; unit tests use fakes and never hit the network or spend tokens.
-- Project home: `/Users/qatadaha/Coding/hermit/`. Package: `hermit/`. Tests: `tests/`.
+- Project home: `/Users/qatadaha/Coding/avow/`. Package: `avow/`. Tests: `tests/`.
 - **No `git commit` without the user's explicit go-ahead** (standing user rule). Each task's final step prepares a commit; the human runs it only when greenlit.
 
 ---
@@ -25,11 +25,11 @@
 ### Task 1: Project scaffold + RunConfig
 
 **Files:**
-- Create: `/Users/qatadaha/Coding/hermit/pyproject.toml`
-- Create: `/Users/qatadaha/Coding/hermit/hermit/__init__.py`
-- Create: `/Users/qatadaha/Coding/hermit/hermit/config.py`
-- Create: `/Users/qatadaha/Coding/hermit/tests/__init__.py`
-- Test: `/Users/qatadaha/Coding/hermit/tests/test_config.py`
+- Create: `/Users/qatadaha/Coding/avow/pyproject.toml`
+- Create: `/Users/qatadaha/Coding/avow/avow/__init__.py`
+- Create: `/Users/qatadaha/Coding/avow/avow/config.py`
+- Create: `/Users/qatadaha/Coding/avow/tests/__init__.py`
+- Test: `/Users/qatadaha/Coding/avow/tests/test_config.py`
 
 **Interfaces:**
 - Produces: `RunConfig` (pydantic model) with fields `builder_model: str`, `examiner_model: str`, `max_iterations: int`, `plateau_patience: int`, `max_cost_usd: float`, `max_wall_seconds: int`, `test_command: list[str]`, `holdout_fraction: float`; classmethod `RunConfig.from_yaml(path: str | Path) -> RunConfig` (missing file → all defaults).
@@ -39,7 +39,7 @@
 ```python
 # tests/test_config.py
 from pathlib import Path
-from hermit.config import RunConfig
+from avow.config import RunConfig
 
 
 def test_defaults_are_sane():
@@ -55,7 +55,7 @@ def test_defaults_are_sane():
 
 
 def test_from_yaml_overrides_then_falls_back(tmp_path: Path):
-    p = tmp_path / "hermit.yaml"
+    p = tmp_path / "avow.yaml"
     p.write_text("max_iterations: 5\nbuilder_model: claude-sonnet-4-6\n")
     cfg = RunConfig.from_yaml(p)
     assert cfg.max_iterations == 5
@@ -70,15 +70,15 @@ def test_from_yaml_missing_file_is_all_defaults(tmp_path: Path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && python -m pytest tests/test_config.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'hermit'`.
+Run: `cd /Users/qatadaha/Coding/avow && python -m pytest tests/test_config.py -q`
+Expected: FAIL — `ModuleNotFoundError: No module named 'avow'`.
 
 - [ ] **Step 3: Write `pyproject.toml`**
 
 ```toml
 # pyproject.toml
 [project]
-name = "hermit"
+name = "avow"
 version = "0.1.0"
 description = "Autonomous build-and-improve loop"
 requires-python = ">=3.11"
@@ -92,20 +92,20 @@ dependencies = [
 dev = ["pytest>=8.0", "pytest-json-report>=1.5"]
 
 [project.scripts]
-hermit = "hermit.cli:main"
+avow = "avow.cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["hermit*"]
+include = ["avow*"]
 ```
 
 - [ ] **Step 4: Write the package init files**
 
 ```python
-# hermit/__init__.py
+# avow/__init__.py
 __all__ = []
 ```
 
@@ -116,7 +116,7 @@ __all__ = []
 - [ ] **Step 5: Write `RunConfig`**
 
 ```python
-# hermit/config.py
+# avow/config.py
 from __future__ import annotations
 
 from pathlib import Path
@@ -146,13 +146,13 @@ class RunConfig(BaseModel):
 
 - [ ] **Step 6: Install and run tests**
 
-Run: `cd /Users/qatadaha/Coding/hermit && pip install -e ".[dev]" && python -m pytest tests/test_config.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && pip install -e ".[dev]" && python -m pytest tests/test_config.py -q`
 Expected: PASS (3 passed).
 
 - [ ] **Step 7: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add pyproject.toml hermit/__init__.py hermit/config.py tests/__init__.py tests/test_config.py && git commit -m "feat: scaffold hermit package and RunConfig"
+cd /Users/qatadaha/Coding/avow && git add pyproject.toml avow/__init__.py avow/config.py tests/__init__.py tests/test_config.py && git commit -m "feat: scaffold avow package and RunConfig"
 ```
 
 ---
@@ -160,8 +160,8 @@ cd /Users/qatadaha/Coding/hermit && git add pyproject.toml hermit/__init__.py he
 ### Task 2: Scoring — parse pytest-json-report into a TestResult
 
 **Files:**
-- Create: `/Users/qatadaha/Coding/hermit/hermit/scoring.py`
-- Test: `/Users/qatadaha/Coding/hermit/tests/test_scoring.py`
+- Create: `/Users/qatadaha/Coding/avow/avow/scoring.py`
+- Test: `/Users/qatadaha/Coding/avow/tests/test_scoring.py`
 
 **Interfaces:**
 - Consumes: a pytest-json-report dict (from the `pytest-json-report` plugin's `.report.json`).
@@ -171,7 +171,7 @@ cd /Users/qatadaha/Coding/hermit && git add pyproject.toml hermit/__init__.py he
 
 ```python
 # tests/test_scoring.py
-from hermit.scoring import parse_report, TestResult, FailureInfo
+from avow.scoring import parse_report, TestResult, FailureInfo
 
 
 def _report(tests):
@@ -212,13 +212,13 @@ def test_empty_suite_scores_zero_and_is_not_green():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && python -m pytest tests/test_scoring.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'hermit.scoring'`.
+Run: `cd /Users/qatadaha/Coding/avow && python -m pytest tests/test_scoring.py -q`
+Expected: FAIL — `ModuleNotFoundError: No module named 'avow.scoring'`.
 
 - [ ] **Step 3: Write `scoring.py`**
 
 ```python
-# hermit/scoring.py
+# avow/scoring.py
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -278,13 +278,13 @@ def _longrepr(test: dict) -> str:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && python -m pytest tests/test_scoring.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && python -m pytest tests/test_scoring.py -q`
 Expected: PASS (3 passed).
 
 - [ ] **Step 5: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/scoring.py tests/test_scoring.py && git commit -m "feat: parse pytest-json-report into TestResult with score/is_green"
+cd /Users/qatadaha/Coding/avow && git add avow/scoring.py tests/test_scoring.py && git commit -m "feat: parse pytest-json-report into TestResult with score/is_green"
 ```
 
 ---
@@ -292,8 +292,8 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/scoring.py tests/test_scoring
 ### Task 3: Budget — hard caps on cost, iterations, wall-clock
 
 **Files:**
-- Create: `/Users/qatadaha/Coding/hermit/hermit/budget.py`
-- Test: `/Users/qatadaha/Coding/hermit/tests/test_budget.py`
+- Create: `/Users/qatadaha/Coding/avow/avow/budget.py`
+- Test: `/Users/qatadaha/Coding/avow/tests/test_budget.py`
 
 **Interfaces:**
 - Produces: `PRICES: dict[str, tuple[float, float]]` (per-1M input,output USD); `Budget(max_cost_usd, max_iterations, max_wall_seconds, started_at: float | None = None)` with methods `charge_tokens(model, input_tokens, output_tokens) -> None`, `charge_usd(amount: float) -> None`, `tick_iteration() -> None`, properties `spent_usd: float`, `iterations: int`, and `exhausted(now: float) -> str | None` (returns a reason string or `None`). `now` is injected (monotonic seconds) for deterministic tests.
@@ -303,7 +303,7 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/scoring.py tests/test_scoring
 ```python
 # tests/test_budget.py
 import pytest
-from hermit.budget import Budget, PRICES
+from avow.budget import Budget, PRICES
 
 
 def test_charge_tokens_uses_price_table():
@@ -339,13 +339,13 @@ def test_unknown_model_charges_zero_but_does_not_crash():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && python -m pytest tests/test_budget.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'hermit.budget'`.
+Run: `cd /Users/qatadaha/Coding/avow && python -m pytest tests/test_budget.py -q`
+Expected: FAIL — `ModuleNotFoundError: No module named 'avow.budget'`.
 
 - [ ] **Step 3: Write `budget.py`**
 
 ```python
-# hermit/budget.py
+# avow/budget.py
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -400,13 +400,13 @@ class Budget:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && python -m pytest tests/test_budget.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && python -m pytest tests/test_budget.py -q`
 Expected: PASS (4 passed).
 
 - [ ] **Step 5: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/budget.py tests/test_budget.py && git commit -m "feat: Budget with hard cost/iteration/wall-clock caps"
+cd /Users/qatadaha/Coding/avow && git add avow/budget.py tests/test_budget.py && git commit -m "feat: Budget with hard cost/iteration/wall-clock caps"
 ```
 
 ---
@@ -414,8 +414,8 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/budget.py tests/test_budget.p
 ### Task 4: Memory — append-only JSONL run log
 
 **Files:**
-- Create: `/Users/qatadaha/Coding/hermit/hermit/memory.py`
-- Test: `/Users/qatadaha/Coding/hermit/tests/test_memory.py`
+- Create: `/Users/qatadaha/Coding/avow/avow/memory.py`
+- Test: `/Users/qatadaha/Coding/avow/tests/test_memory.py`
 
 **Interfaces:**
 - Produces: `AttemptRecord(iteration: int, score: float, is_green: bool, diff_summary: str, failing: list[str], plan: str, cost_usd: float)`; `RunLog(path: str | Path)` with `record(rec: AttemptRecord) -> None` (appends one JSON line, creating parent dirs) and `records() -> list[dict]` (reads all lines back).
@@ -425,7 +425,7 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/budget.py tests/test_budget.p
 ```python
 # tests/test_memory.py
 from pathlib import Path
-from hermit.memory import RunLog, AttemptRecord
+from avow.memory import RunLog, AttemptRecord
 
 
 def test_records_round_trip(tmp_path: Path):
@@ -446,13 +446,13 @@ def test_records_round_trip(tmp_path: Path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && python -m pytest tests/test_memory.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'hermit.memory'`.
+Run: `cd /Users/qatadaha/Coding/avow && python -m pytest tests/test_memory.py -q`
+Expected: FAIL — `ModuleNotFoundError: No module named 'avow.memory'`.
 
 - [ ] **Step 3: Write `memory.py`**
 
 ```python
-# hermit/memory.py
+# avow/memory.py
 from __future__ import annotations
 
 import json
@@ -488,13 +488,13 @@ class RunLog:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && python -m pytest tests/test_memory.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && python -m pytest tests/test_memory.py -q`
 Expected: PASS (1 passed).
 
 - [ ] **Step 5: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/memory.py tests/test_memory.py && git commit -m "feat: append-only JSONL run log"
+cd /Users/qatadaha/Coding/avow && git add avow/memory.py tests/test_memory.py && git commit -m "feat: append-only JSONL run log"
 ```
 
 ---
@@ -502,8 +502,8 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/memory.py tests/test_memory.p
 ### Task 5: Workspace — snapshot-based sandbox with non-regression support
 
 **Files:**
-- Create: `/Users/qatadaha/Coding/hermit/hermit/workspace.py`
-- Test: `/Users/qatadaha/Coding/hermit/tests/test_workspace.py`
+- Create: `/Users/qatadaha/Coding/avow/avow/workspace.py`
+- Test: `/Users/qatadaha/Coding/avow/tests/test_workspace.py`
 
 > Note: v1 uses a plain directory snapshot (copytree) for isolation and non-regression. Git worktree / Docker is a v2 hardening behind this same interface.
 
@@ -515,7 +515,7 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/memory.py tests/test_memory.p
 ```python
 # tests/test_workspace.py
 from pathlib import Path
-from hermit.workspace import Workspace
+from avow.workspace import Workspace
 
 
 def test_seed_empty_then_promote_then_reseed(tmp_path: Path):
@@ -552,13 +552,13 @@ def test_promote_overwrites_previous_best(tmp_path: Path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && python -m pytest tests/test_workspace.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'hermit.workspace'`.
+Run: `cd /Users/qatadaha/Coding/avow && python -m pytest tests/test_workspace.py -q`
+Expected: FAIL — `ModuleNotFoundError: No module named 'avow.workspace'`.
 
 - [ ] **Step 3: Write `workspace.py`**
 
 ```python
-# hermit/workspace.py
+# avow/workspace.py
 from __future__ import annotations
 
 import shutil
@@ -588,13 +588,13 @@ class Workspace:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && python -m pytest tests/test_workspace.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && python -m pytest tests/test_workspace.py -q`
 Expected: PASS (2 passed).
 
 - [ ] **Step 5: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/workspace.py tests/test_workspace.py && git commit -m "feat: snapshot-based Workspace with non-regression promote/reseed"
+cd /Users/qatadaha/Coding/avow && git add avow/workspace.py tests/test_workspace.py && git commit -m "feat: snapshot-based Workspace with non-regression promote/reseed"
 ```
 
 ---
@@ -602,11 +602,11 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/workspace.py tests/test_works
 ### Task 6: Runner — restore frozen tests and run pytest
 
 **Files:**
-- Create: `/Users/qatadaha/Coding/hermit/hermit/runner.py`
-- Test: `/Users/qatadaha/Coding/hermit/tests/test_runner.py`
+- Create: `/Users/qatadaha/Coding/avow/avow/runner.py`
+- Test: `/Users/qatadaha/Coding/avow/tests/test_runner.py`
 
 **Interfaces:**
-- Consumes: `TestResult`/`parse_report` from `hermit.scoring`.
+- Consumes: `TestResult`/`parse_report` from `avow.scoring`.
 - Produces: `Runner(solution_dir: Path, frozen_tests: Path, test_command: list[str])` with `run() -> TestResult`. `run()` (1) wipes and re-copies `frozen_tests` into `solution_dir / "tests"` (anti-cheat: the Builder's edits to tests are discarded every run), (2) runs `test_command + ["--json-report", "--json-report-file", <tmp>]` with `cwd=solution_dir`, (3) parses the report into a `TestResult`. On a collection crash (no report written), returns `TestResult(0, 0, 1, 1, [FailureInfo("collection", <stderr>)])`.
 
 - [ ] **Step 1: Write the failing test**
@@ -614,7 +614,7 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/workspace.py tests/test_works
 ```python
 # tests/test_runner.py
 from pathlib import Path
-from hermit.runner import Runner
+from avow.runner import Runner
 
 
 def _make_goal(tmp_path: Path, solution_src: str):
@@ -656,13 +656,13 @@ def test_runner_restores_tests_each_run(tmp_path: Path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && python -m pytest tests/test_runner.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'hermit.runner'`.
+Run: `cd /Users/qatadaha/Coding/avow && python -m pytest tests/test_runner.py -q`
+Expected: FAIL — `ModuleNotFoundError: No module named 'avow.runner'`.
 
 - [ ] **Step 3: Write `runner.py`**
 
 ```python
-# hermit/runner.py
+# avow/runner.py
 from __future__ import annotations
 
 import json
@@ -672,7 +672,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from hermit.scoring import FailureInfo, TestResult, parse_report
+from avow.scoring import FailureInfo, TestResult, parse_report
 
 
 class Runner:
@@ -708,13 +708,13 @@ class Runner:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && python -m pytest tests/test_runner.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && python -m pytest tests/test_runner.py -q`
 Expected: PASS (3 passed). (Requires `pytest-json-report`, installed via `.[dev]` in Task 1.)
 
 - [ ] **Step 5: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/runner.py tests/test_runner.py && git commit -m "feat: Runner restores frozen tests and runs pytest into a TestResult"
+cd /Users/qatadaha/Coding/avow && git add avow/runner.py tests/test_runner.py && git commit -m "feat: Runner restores frozen tests and runs pytest into a TestResult"
 ```
 
 ---
@@ -722,8 +722,8 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/runner.py tests/test_runner.p
 ### Task 7: Examiner — write an acceptance-test suite via structured outputs
 
 **Files:**
-- Create: `/Users/qatadaha/Coding/hermit/hermit/examiner.py`
-- Test: `/Users/qatadaha/Coding/hermit/tests/test_examiner.py`
+- Create: `/Users/qatadaha/Coding/avow/avow/examiner.py`
+- Test: `/Users/qatadaha/Coding/avow/tests/test_examiner.py`
 
 **Interfaces:**
 - Produces: pydantic models `TestFile(path: str, content: str)` and `TestSuite(test_plan: str, tests: list[TestFile])`; `ExaminerResult(suite: TestSuite, input_tokens: int, output_tokens: int)`; `Examiner(client, model: str)` with `write_tests(goal: str) -> ExaminerResult` (calls `client.messages.parse(model=..., max_tokens=16000, messages=[...], output_format=TestSuite)` and reads `response.parsed_output` + `response.usage`); and the pure helper `split_suite(tests: list[TestFile], holdout_fraction: float) -> tuple[list[TestFile], list[TestFile]]` (deterministic: sort by path, move the last `ceil(frac * n)` files to holdout; never empties the visible set).
@@ -734,7 +734,7 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/runner.py tests/test_runner.p
 ```python
 # tests/test_examiner.py
 from types import SimpleNamespace
-from hermit.examiner import Examiner, TestSuite, TestFile, split_suite
+from avow.examiner import Examiner, TestSuite, TestFile, split_suite
 
 
 class FakeMessages:
@@ -784,13 +784,13 @@ def test_split_suite_zero_fraction_holds_out_nothing():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && python -m pytest tests/test_examiner.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'hermit.examiner'`.
+Run: `cd /Users/qatadaha/Coding/avow && python -m pytest tests/test_examiner.py -q`
+Expected: FAIL — `ModuleNotFoundError: No module named 'avow.examiner'`.
 
 - [ ] **Step 3: Write `examiner.py`**
 
 ```python
-# hermit/examiner.py
+# avow/examiner.py
 from __future__ import annotations
 
 import math
@@ -865,13 +865,13 @@ def split_suite(tests: list[TestFile], holdout_fraction: float) -> tuple[list[Te
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && python -m pytest tests/test_examiner.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && python -m pytest tests/test_examiner.py -q`
 Expected: PASS (3 passed).
 
 - [ ] **Step 5: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/examiner.py tests/test_examiner.py && git commit -m "feat: Examiner writes adversarial test suite via structured outputs; deterministic holdout split"
+cd /Users/qatadaha/Coding/avow && git add avow/examiner.py tests/test_examiner.py && git commit -m "feat: Examiner writes adversarial test suite via structured outputs; deterministic holdout split"
 ```
 
 ---
@@ -879,11 +879,11 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/examiner.py tests/test_examin
 ### Task 8: Builder — drive headless `claude -p` as the code-writing agent
 
 **Files:**
-- Create: `/Users/qatadaha/Coding/hermit/hermit/builder.py`
-- Test: `/Users/qatadaha/Coding/hermit/tests/test_builder.py`
+- Create: `/Users/qatadaha/Coding/avow/avow/builder.py`
+- Test: `/Users/qatadaha/Coding/avow/tests/test_builder.py`
 
 **Interfaces:**
-- Consumes: `FailureInfo` from `hermit.scoring`.
+- Consumes: `FailureInfo` from `avow.scoring`.
 - Produces: `BuilderOutcome(plan: str, cost_usd: float, raw: dict)`; `Builder(model: str, runner=subprocess.run)` with `attempt(solution_dir: Path, goal: str, failures: list[FailureInfo]) -> BuilderOutcome`. `attempt` invokes `["claude", "-p", <prompt>, "--output-format", "json", "--dangerously-skip-permissions", "--model", model]` with `cwd=solution_dir`, then parses stdout JSON (`result` → `plan`, `total_cost_usd` → `cost_usd`). `runner` is injectable (defaults to `subprocess.run`) so tests don't spawn `claude`.
 
 > Anti-cheat reinforcement: the prompt instructs the Builder to edit only solution code and never create/modify any `tests/` files; the Runner discards test edits regardless.
@@ -895,8 +895,8 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/examiner.py tests/test_examin
 import json
 import subprocess
 from pathlib import Path
-from hermit.builder import Builder, BuilderOutcome
-from hermit.scoring import FailureInfo
+from avow.builder import Builder, BuilderOutcome
+from avow.scoring import FailureInfo
 
 
 def test_attempt_invokes_claude_and_parses_json(tmp_path: Path):
@@ -945,13 +945,13 @@ def test_attempt_handles_nonjson_stdout(tmp_path: Path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && python -m pytest tests/test_builder.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'hermit.builder'`.
+Run: `cd /Users/qatadaha/Coding/avow && python -m pytest tests/test_builder.py -q`
+Expected: FAIL — `ModuleNotFoundError: No module named 'avow.builder'`.
 
 - [ ] **Step 3: Write `builder.py`**
 
 ```python
-# hermit/builder.py
+# avow/builder.py
 from __future__ import annotations
 
 import json
@@ -959,7 +959,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from hermit.scoring import FailureInfo
+from avow.scoring import FailureInfo
 
 _PROMPT = """\
 You are an autonomous software builder working inside the current directory.
@@ -1028,13 +1028,13 @@ class Builder:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && python -m pytest tests/test_builder.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && python -m pytest tests/test_builder.py -q`
 Expected: PASS (3 passed).
 
 - [ ] **Step 5: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/builder.py tests/test_builder.py && git commit -m "feat: Builder drives headless claude -p with injectable runner"
+cd /Users/qatadaha/Coding/avow && git add avow/builder.py tests/test_builder.py && git commit -m "feat: Builder drives headless claude -p with injectable runner"
 ```
 
 ---
@@ -1042,8 +1042,8 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/builder.py tests/test_builder
 ### Task 9: The loop — `solve()` with non-regression and stop conditions
 
 **Files:**
-- Create: `/Users/qatadaha/Coding/hermit/hermit/loop.py`
-- Test: `/Users/qatadaha/Coding/hermit/tests/test_loop.py`
+- Create: `/Users/qatadaha/Coding/avow/avow/loop.py`
+- Test: `/Users/qatadaha/Coding/avow/tests/test_loop.py`
 
 **Interfaces:**
 - Consumes: `RunConfig`, `Budget`, `Workspace`, `Runner`, `RunLog`/`AttemptRecord`, `Examiner`/`ExaminerResult`/`split_suite`, `Builder`/`BuilderOutcome`, `TestResult`.
@@ -1058,10 +1058,10 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/builder.py tests/test_builder
 ```python
 # tests/test_loop.py
 from pathlib import Path
-from hermit.loop import solve, SolveResult
-from hermit.config import RunConfig
-from hermit.examiner import Examiner, ExaminerResult, TestSuite, TestFile
-from hermit.scoring import FailureInfo
+from avow.loop import solve, SolveResult
+from avow.config import RunConfig
+from avow.examiner import Examiner, ExaminerResult, TestSuite, TestFile
+from avow.scoring import FailureInfo
 
 
 # --- fakes ---------------------------------------------------------------
@@ -1090,7 +1090,7 @@ class FlakyBuilder:
         self.calls += 1
         src = "def add(a, b):\n    return a + b\n" if self.calls >= 2 else "def add(a, b):\n    return a - b\n"
         (Path(solution_dir) / "lib.py").write_text(src)
-        from hermit.builder import BuilderOutcome
+        from avow.builder import BuilderOutcome
         return BuilderOutcome(plan=f"attempt {self.calls}", cost_usd=0.01, raw={})
 
 
@@ -1117,7 +1117,7 @@ def test_loop_stops_at_max_iterations_when_never_green(tmp_path: Path):
     class AlwaysWrong:
         def attempt(self, solution_dir, goal, failures):
             (Path(solution_dir) / "lib.py").write_text("def add(a, b):\n    return 0\n")
-            from hermit.builder import BuilderOutcome
+            from avow.builder import BuilderOutcome
             return BuilderOutcome(plan="nope", cost_usd=0.01, raw={})
 
     cfg = RunConfig(max_iterations=3, plateau_patience=99, holdout_fraction=0.0)
@@ -1131,31 +1131,31 @@ def test_loop_writes_frozen_tests_and_run_log(tmp_path: Path):
     cfg = RunConfig(max_iterations=2, holdout_fraction=0.0)
     solve(_goal(tmp_path), cfg, StubExaminer(), FlakyBuilder(), now=lambda: 0.0)
     assert (tmp_path / "tests_frozen" / "test_add.py").exists()
-    log = (tmp_path / ".hermit" / "run.jsonl").read_text().strip().splitlines()
+    log = (tmp_path / ".avow" / "run.jsonl").read_text().strip().splitlines()
     assert len(log) >= 1
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && python -m pytest tests/test_loop.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'hermit.loop'`.
+Run: `cd /Users/qatadaha/Coding/avow && python -m pytest tests/test_loop.py -q`
+Expected: FAIL — `ModuleNotFoundError: No module named 'avow.loop'`.
 
 - [ ] **Step 3: Write `loop.py`**
 
 ```python
-# hermit/loop.py
+# avow/loop.py
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from hermit.budget import Budget
-from hermit.config import RunConfig
-from hermit.examiner import Examiner, TestFile, split_suite
-from hermit.memory import AttemptRecord, RunLog
-from hermit.runner import Runner
-from hermit.workspace import Workspace
+from avow.budget import Budget
+from avow.config import RunConfig
+from avow.examiner import Examiner, TestFile, split_suite
+from avow.memory import AttemptRecord, RunLog
+from avow.runner import Runner
+from avow.workspace import Workspace
 
 
 @dataclass
@@ -1188,10 +1188,10 @@ def solve(
     goal_dir = Path(goal_dir)
     goal = (goal_dir / "goal.md").read_text()
 
-    hermit_dir = goal_dir / ".hermit"
+    avow_dir = goal_dir / ".avow"
     frozen = goal_dir / "tests_frozen"
     holdout = goal_dir / "tests_holdout"
-    best_dir = hermit_dir / "best"
+    best_dir = avow_dir / "best"
 
     budget = Budget(
         max_cost_usd=config.max_cost_usd,
@@ -1207,8 +1207,8 @@ def solve(
         _write_tests(frozen, visible)
         _write_tests(holdout, held)
 
-    log = RunLog(hermit_dir / "run.jsonl")
-    workspace = Workspace(hermit_dir / "ws")
+    log = RunLog(avow_dir / "run.jsonl")
+    workspace = Workspace(avow_dir / "ws")
     runner = Runner(workspace.solution_dir, frozen, config.test_command)
 
     best_score = -1.0
@@ -1274,38 +1274,38 @@ def _holdout_green(holdout: Path, best_dir: Path, config: RunConfig) -> bool:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && python -m pytest tests/test_loop.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && python -m pytest tests/test_loop.py -q`
 Expected: PASS (3 passed).
 
 - [ ] **Step 5: Run the whole suite**
 
-Run: `cd /Users/qatadaha/Coding/hermit && python -m pytest -q`
+Run: `cd /Users/qatadaha/Coding/avow && python -m pytest -q`
 Expected: PASS (all tasks' tests green).
 
 - [ ] **Step 6: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/loop.py tests/test_loop.py && git commit -m "feat: iterative solve() loop with non-regression, holdout check, and stop conditions"
+cd /Users/qatadaha/Coding/avow && git add avow/loop.py tests/test_loop.py && git commit -m "feat: iterative solve() loop with non-regression, holdout check, and stop conditions"
 ```
 
 ---
 
-### Task 10: CLI — `hermit solve <goal-dir>`
+### Task 10: CLI — `avow solve <goal-dir>`
 
 **Files:**
-- Create: `/Users/qatadaha/Coding/hermit/hermit/cli.py`
-- Test: `/Users/qatadaha/Coding/hermit/tests/test_cli.py`
+- Create: `/Users/qatadaha/Coding/avow/avow/cli.py`
+- Test: `/Users/qatadaha/Coding/avow/tests/test_cli.py`
 
 **Interfaces:**
 - Consumes: everything above.
-- Produces: `build_examiner(config) -> Examiner` (constructs an `anthropic.Anthropic()` client) and `main(argv: list[str] | None = None) -> int`. CLI: `hermit solve <goal-dir> [--config hermit.yaml] [--no-regenerate] [--yes]`. Without `--yes`, after the Examiner writes the suite the CLI prints the test plan and pauses for confirmation before the build loop (the one human gate on the verifier). `--no-regenerate` reuses existing `tests_frozen/` and skips the Examiner.
+- Produces: `build_examiner(config) -> Examiner` (constructs an `anthropic.Anthropic()` client) and `main(argv: list[str] | None = None) -> int`. CLI: `avow solve <goal-dir> [--config avow.yaml] [--no-regenerate] [--yes]`. Without `--yes`, after the Examiner writes the suite the CLI prints the test plan and pauses for confirmation before the build loop (the one human gate on the verifier). `--no-regenerate` reuses existing `tests_frozen/` and skips the Examiner.
 
 - [ ] **Step 1: Write the failing test**
 
 ```python
 # tests/test_cli.py
 from pathlib import Path
-from hermit.cli import main
+from avow.cli import main
 
 
 def test_cli_runs_with_injected_no_regenerate(tmp_path: Path, monkeypatch):
@@ -1318,7 +1318,7 @@ def test_cli_runs_with_injected_no_regenerate(tmp_path: Path, monkeypatch):
     )
 
     # Patch the Builder so the CLI doesn't spawn `claude`.
-    import hermit.cli as cli
+    import avow.cli as cli
 
     class StubBuilder:
         def __init__(self, *a, **k):
@@ -1327,34 +1327,34 @@ def test_cli_runs_with_injected_no_regenerate(tmp_path: Path, monkeypatch):
         def attempt(self, solution_dir, goal, failures):
             self.calls += 1
             (Path(solution_dir) / "lib.py").write_text("def add(a, b):\n    return a + b\n")
-            from hermit.builder import BuilderOutcome
+            from avow.builder import BuilderOutcome
             return BuilderOutcome(plan="ok", cost_usd=0.0, raw={})
 
     monkeypatch.setattr(cli, "Builder", StubBuilder)
 
     rc = main(["solve", str(tmp_path), "--no-regenerate", "--yes"])
     assert rc == 0
-    assert (tmp_path / ".hermit" / "best" / "lib.py").exists()
+    assert (tmp_path / ".avow" / "best" / "lib.py").exists()
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && python -m pytest tests/test_cli.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'hermit.cli'`.
+Run: `cd /Users/qatadaha/Coding/avow && python -m pytest tests/test_cli.py -q`
+Expected: FAIL — `ModuleNotFoundError: No module named 'avow.cli'`.
 
 - [ ] **Step 3: Write `cli.py`**
 
 ```python
-# hermit/cli.py
+# avow/cli.py
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
 
-from hermit.builder import Builder
-from hermit.config import RunConfig
-from hermit.examiner import Examiner
-from hermit.loop import solve
+from avow.builder import Builder
+from avow.config import RunConfig
+from avow.examiner import Examiner
+from avow.loop import solve
 
 
 def build_examiner(config: RunConfig) -> Examiner:
@@ -1363,7 +1363,7 @@ def build_examiner(config: RunConfig) -> Examiner:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="hermit")
+    parser = argparse.ArgumentParser(prog="avow")
     sub = parser.add_subparsers(dest="command", required=True)
     solve_p = sub.add_parser("solve", help="run the build-and-improve loop on a goal dir")
     solve_p.add_argument("goal_dir")
@@ -1388,8 +1388,8 @@ def main(argv: list[str] | None = None) -> int:
             print("Aborted.")
             return 1
         # Re-use the just-written suite by persisting it and switching off regeneration.
-        from hermit.examiner import split_suite
-        from hermit.loop import _write_tests
+        from avow.examiner import split_suite
+        from avow.loop import _write_tests
         visible, held = split_suite(ex.suite.tests, config.holdout_fraction)
         _write_tests(goal_dir / "tests_frozen", visible)
         _write_tests(goal_dir / "tests_holdout", held)
@@ -1415,18 +1415,18 @@ if __name__ == "__main__":
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && python -m pytest tests/test_cli.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && python -m pytest tests/test_cli.py -q`
 Expected: PASS (1 passed).
 
 - [ ] **Step 5: Run the whole suite + smoke-check the entry point**
 
-Run: `cd /Users/qatadaha/Coding/hermit && python -m pytest -q && hermit --help`
-Expected: all tests PASS; `hermit --help` prints usage with the `solve` subcommand.
+Run: `cd /Users/qatadaha/Coding/avow && python -m pytest -q && avow --help`
+Expected: all tests PASS; `avow --help` prints usage with the `solve` subcommand.
 
 - [ ] **Step 6: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/cli.py tests/test_cli.py && git commit -m "feat: hermit solve CLI with human approval gate on the generated test plan"
+cd /Users/qatadaha/Coding/avow && git add avow/cli.py tests/test_cli.py && git commit -m "feat: avow solve CLI with human approval gate on the generated test plan"
 ```
 
 ---
@@ -1435,11 +1435,11 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/cli.py tests/test_cli.py && g
 
 This is the moment the loop closes for real — run it once by hand, not in CI:
 
-1. Create a goal dir: `mkdir -p ~/Coding/hermit-demo && printf 'Build a module `lib.py` exposing `def slugify(s: str) -> str` that lowercases, trims, and replaces runs of non-alphanumeric characters with single hyphens.' > ~/Coding/hermit-demo/goal.md`
+1. Create a goal dir: `mkdir -p ~/Coding/avow-demo && printf 'Build a module `lib.py` exposing `def slugify(s: str) -> str` that lowercases, trims, and replaces runs of non-alphanumeric characters with single hyphens.' > ~/Coding/avow-demo/goal.md`
 2. Ensure `claude` is installed/authenticated and `ANTHROPIC_API_KEY` is set (Examiner uses the SDK; Builder uses the CLI).
-3. Run: `hermit solve ~/Coding/hermit-demo`
-4. Approve the printed test plan, then watch `~/Coding/hermit-demo/.hermit/run.jsonl` — score should climb to 1.0 and the run should end `success=True reason=green`.
-5. Inspect `~/Coding/hermit-demo/.hermit/best/lib.py` — the autonomously-built, test-passing artifact.
+3. Run: `avow solve ~/Coding/avow-demo`
+4. Approve the printed test plan, then watch `~/Coding/avow-demo/.avow/run.jsonl` — score should climb to 1.0 and the run should end `success=True reason=green`.
+5. Inspect `~/Coding/avow-demo/.avow/best/lib.py` — the autonomously-built, test-passing artifact.
 
 ## What v1 deliberately does NOT do (earned in later plans)
 

@@ -1,8 +1,8 @@
 from pathlib import Path
 from types import SimpleNamespace
 import pytest
-from hermit.panel import panel_intent_check, PanelIntentResult
-from hermit.backtranslation import _InferredGoal, IntentMatch
+from avow.panel import panel_intent_check, PanelIntentResult
+from avow.backtranslation import _InferredGoal, IntentMatch
 
 
 class FakePanelClient:

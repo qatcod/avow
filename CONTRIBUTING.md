@@ -1,16 +1,16 @@
-# Contributing to Hermit
+# Contributing to Avow
 
-Thanks for considering a contribution. Hermit is a verifier for AI-generated code,
+Thanks for considering a contribution. Avow is a verifier for AI-generated code,
 so the bar for changes to the verification path is high: a change to how confidence
 is computed has to be *measured*, not argued.
 
 ## Getting set up
 
-Hermit needs Python 3.11 or newer.
+Avow needs Python 3.11 or newer.
 
 ```bash
-git clone https://github.com/qatcod/hermit
-cd hermit
+git clone https://github.com/qatcod/avow
+cd avow
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 python -m pytest -q          # the full suite (a few minutes; mutation tests are slow)
@@ -22,7 +22,7 @@ The test suite runs fully offline with stubs, so you do not need either to run t
 
 ## How the code is organized
 
-- `hermit/` is the package. `loop.py` is the build-and-verify loop; the verification
+- `avow/` is the package. `loop.py` is the build-and-verify loop; the verification
   signals live in `mutation.py`, `backtranslation.py` (intent), `oracle.py`,
   `properties.py`, and `confidence.py`; `calibration.py` and `realcorpus.py` measure
   whether the confidence number is trustworthy.
@@ -35,7 +35,7 @@ The test suite runs fully offline with stubs, so you do not need either to run t
 2. Write a test that fails, then make it pass. New behavior needs a test.
 3. Keep the change focused. One logical change per pull request.
 4. Run the full suite locally (`python -m pytest -q`) and make sure it is green.
-5. If you touch the confidence path, run `hermit calibrate` before and after and put
+5. If you touch the confidence path, run `avow calibrate` before and after and put
    the numbers in the PR. A confidence change that does not report its effect on the
    reliability curve will not be merged.
 
@@ -50,5 +50,5 @@ The test suite runs fully offline with stubs, so you do not need either to run t
 
 ## Licensing of contributions
 
-Hermit is licensed under Apache-2.0 (see `LICENSE`). By submitting a contribution you
+Avow is licensed under Apache-2.0 (see `LICENSE`). By submitting a contribution you
 agree that it is provided under the same license.

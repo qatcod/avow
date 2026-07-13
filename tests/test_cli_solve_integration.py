@@ -1,11 +1,11 @@
 from pathlib import Path
 from types import SimpleNamespace
-import hermit.cli as cli
-from hermit.examiner import TestSuite, TestFile
-from hermit.properties import _PropertySet
-from hermit.backtranslation import _InferredGoal, IntentMatch
-from hermit.oracle import _OraclePair
-from hermit.builder import BuilderOutcome
+import avow.cli as cli
+from avow.examiner import TestSuite, TestFile
+from avow.properties import _PropertySet
+from avow.backtranslation import _InferredGoal, IntentMatch
+from avow.oracle import _OraclePair
+from avow.builder import BuilderOutcome
 
 
 class DispatchClient:
@@ -48,7 +48,7 @@ class StubBuilder:
         return BuilderOutcome(plan="ok", cost_usd=0.0, raw={})
 
 
-def test_hermit_solve_activates_intent_property_and_oracle(tmp_path, capsys, monkeypatch):
+def test_avow_solve_activates_intent_property_and_oracle(tmp_path, capsys, monkeypatch):
     (tmp_path / "goal.md").write_text("Build add(a, b) returning a + b.")
     import anthropic
     monkeypatch.setattr(anthropic, "Anthropic", lambda *a, **k: DispatchClient())

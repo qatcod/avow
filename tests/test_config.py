@@ -1,5 +1,5 @@
 from pathlib import Path
-from hermit.config import RunConfig
+from avow.config import RunConfig
 
 
 def test_defaults_are_sane():
@@ -53,7 +53,7 @@ def test_defaults_are_sane():
 
 
 def test_from_yaml_overrides_then_falls_back(tmp_path: Path):
-    p = tmp_path / "hermit.yaml"
+    p = tmp_path / "avow.yaml"
     p.write_text("max_iterations: 5\nbuilder_model: claude-sonnet-4-6\n")
     cfg = RunConfig.from_yaml(p)
     assert cfg.max_iterations == 5

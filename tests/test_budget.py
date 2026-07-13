@@ -1,5 +1,5 @@
 import pytest
-from hermit.budget import Budget, PRICES
+from avow.budget import Budget, PRICES
 
 
 def test_charge_tokens_uses_price_table():

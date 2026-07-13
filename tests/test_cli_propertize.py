@@ -1,8 +1,8 @@
 from pathlib import Path
 from types import SimpleNamespace
-import hermit.cli as cli
-from hermit.properties import _PropertySet
-from hermit.examiner import TestFile
+import avow.cli as cli
+from avow.properties import _PropertySet
+from avow.examiner import TestFile
 
 
 class FakeClient:

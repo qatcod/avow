@@ -1,5 +1,5 @@
 import pytest
-from hermit.panel import aggregate_panel, PanelResult
+from avow.panel import aggregate_panel, PanelResult
 
 
 def test_identical_scores_full_agreement():

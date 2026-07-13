@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Hermit is pre-1.0 and moves quickly. Security fixes are applied to the `main`
+Avow is pre-1.0 and moves quickly. Security fixes are applied to the `main`
 branch; there are no long-term support branches yet.
 
 ## Reporting a vulnerability
@@ -19,9 +19,9 @@ report within a few days and will keep you informed as we work on a fix.
 
 ## Scope note
 
-Hermit runs code: it drives the `claude` CLI to generate code, executes generated
+Avow runs code: it drives the `claude` CLI to generate code, executes generated
 tests and solutions, and (when enabled) runs LLM-authored check commands. Treat a
-Hermit run with the same trust boundary as running any other untrusted code, and
+Avow run with the same trust boundary as running any other untrusted code, and
 run it in an isolated environment when the goal or inputs are not fully trusted.
 This is a design property, not a vulnerability, but reports about ways the sandbox
 boundary can be escaped unexpectedly are welcome.

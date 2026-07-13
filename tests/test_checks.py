@@ -1,5 +1,5 @@
-from hermit.checks import run_checks, combine_checks, CheckResult
-from hermit.scoring import TestResult
+from avow.checks import run_checks, combine_checks, CheckResult
+from avow.scoring import TestResult
 
 
 def test_run_checks_pass_and_fail(tmp_path):

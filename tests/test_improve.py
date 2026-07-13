@@ -1,11 +1,11 @@
 # tests/test_improve.py
 from pathlib import Path
 from types import SimpleNamespace
-from hermit.config import RunConfig
-from hermit.improve import improve, ImproveResult
-from hermit.examiner import ExaminerResult, TestSuite, TestFile
-from hermit.ideator import _IdeaSet, Idea
-from hermit.builder import BuilderOutcome
+from avow.config import RunConfig
+from avow.improve import improve, ImproveResult
+from avow.examiner import ExaminerResult, TestSuite, TestFile
+from avow.ideator import _IdeaSet, Idea
+from avow.builder import BuilderOutcome
 
 
 def _goal(tmp_path: Path) -> Path:

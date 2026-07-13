@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from hermit.examiner import TestFile
+from avow.examiner import TestFile
 
 
 class _PropertySet(BaseModel):

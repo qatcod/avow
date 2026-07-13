@@ -1,5 +1,5 @@
 from pathlib import Path
-from hermit.workspace import Workspace
+from avow.workspace import Workspace
 
 
 def test_seed_empty_then_promote_then_reseed(tmp_path: Path):

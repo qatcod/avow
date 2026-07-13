@@ -13,8 +13,8 @@ venv/
 .coverage
 htmlcov/
 
-# Hermit runtime artifacts (per-goal workspaces, logs, best-so-far snapshots)
-.hermit/
+# Avow runtime artifacts (per-goal workspaces, logs, best-so-far snapshots)
+.avow/
 
 # Subagent-driven-development scratch (progress ledger, briefs, reports)
 .superpowers/

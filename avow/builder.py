@@ -5,7 +5,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from hermit.scoring import FailureInfo
+from avow.scoring import FailureInfo
 
 _PROMPT = """\
 You are an autonomous software builder working inside the current directory.

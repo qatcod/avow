@@ -1,8 +1,8 @@
 import json
 import subprocess
 from pathlib import Path
-from hermit.builder import Builder, BuilderOutcome
-from hermit.scoring import FailureInfo
+from avow.builder import Builder, BuilderOutcome
+from avow.scoring import FailureInfo
 
 
 def test_attempt_invokes_claude_and_parses_json(tmp_path: Path):

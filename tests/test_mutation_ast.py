@@ -1,5 +1,5 @@
 # tests/test_mutation_ast.py
-from hermit.mutation import ast_mutants, Mutant
+from avow.mutation import ast_mutants, Mutant
 
 
 def test_binop_add_becomes_sub():

@@ -1,6 +1,6 @@
 """Point-and-go verification report for an existing repository.
 
-`hermit report <repo>` takes a real repo — nested package, its own test suite —
+`avow report <repo>` takes a real repo — nested package, its own test suite —
 and produces a suite-strength report with no setup: no flat-module surgery, no
 hand-written goal. It discovers the source modules and the tests, confirms the
 suite is green, mutation-tests the real sources, and reports the score plus the
@@ -14,12 +14,12 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from hermit.mutation import run_mutation_testing
+from avow.mutation import run_mutation_testing
 
 # Directories that never contain the code-under-test.
 _SKIP_DIRS = {".git", ".venv", "venv", "env", "__pycache__", "build", "dist", "docs",
               ".tox", ".mypy_cache", ".pytest_cache", ".ruff_cache", "node_modules",
-              ".hermit", ".eggs", "site-packages"}
+              ".avow", ".eggs", "site-packages"}
 _SKIP_NAMES = {"setup.py", "conftest.py"}
 
 

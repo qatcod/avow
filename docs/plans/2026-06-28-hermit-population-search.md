@@ -1,17 +1,17 @@
-# Hermit — Population / Hybrid Search — Implementation Plan
+# Avow — Population / Hybrid Search — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
 
-**Goal:** Run N candidate solutions against the same suite and let the verifier pick the winner (`population_solve`), plus an escalate-on-plateau wrapper (`hybrid_solve`) and a `hermit population` CLI.
+**Goal:** Run N candidate solutions against the same suite and let the verifier pick the winner (`population_solve`), plus an escalate-on-plateau wrapper (`hybrid_solve`) and a `avow population` CLI.
 
-**Architecture:** A new `hermit/population.py` reusing the unchanged `solve()` per candidate with isolated workspaces that share a copy of the suite; `select_best` ranks by confidence. `solve()` is not refactored.
+**Architecture:** A new `avow/population.py` reusing the unchanged `solve()` per candidate with isolated workspaces that share a copy of the suite; `select_best` ranks by confidence. `solve()` is not refactored.
 
-**Tech Stack:** Python 3.12 · reuses `hermit.loop.solve`/`SolveResult` · `hermit.improve._snapshot` · integrates with `hermit.config`/`hermit.cli`.
+**Tech Stack:** Python 3.12 · reuses `avow.loop.solve`/`SolveResult` · `avow.improve._snapshot` · integrates with `avow.config`/`avow.cli`.
 
 ## Global Constraints
 
-- Python **3.11+** (Hermit-local venv at `/Users/qatadaha/Coding/hermit/.venv`, 3.12). Activate it for every command: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && <cmd>`.
-- Reuses verified interfaces (do NOT modify): `solve(goal_dir, config, examiner, builder, *, now, write_tests, mutation_client, intent_client, property_client, oracle_client, ...) -> SolveResult`; `SolveResult(success, best_score, iterations, reason, best_dir, mutation_score=None, survivors=0, intent_score=None, confidence=None, confidence_breakdown={}, oracle_agreement=None)`; `solve` reads the goal from `goal_dir/"goal.md"`, writes `goal_dir/"tests_frozen"` + `goal_dir/"tests_holdout"`, and the best solution to `goal_dir/".hermit"/"best"`; `_snapshot(src, dest)` from `hermit.improve`.
+- Python **3.11+** (Avow-local venv at `/Users/qatadaha/Coding/avow/.venv`, 3.12). Activate it for every command: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && <cmd>`.
+- Reuses verified interfaces (do NOT modify): `solve(goal_dir, config, examiner, builder, *, now, write_tests, mutation_client, intent_client, property_client, oracle_client, ...) -> SolveResult`; `SolveResult(success, best_score, iterations, reason, best_dir, mutation_score=None, survivors=0, intent_score=None, confidence=None, confidence_breakdown={}, oracle_agreement=None)`; `solve` reads the goal from `goal_dir/"goal.md"`, writes `goal_dir/"tests_frozen"` + `goal_dir/"tests_holdout"`, and the best solution to `goal_dir/".avow"/"best"`; `_snapshot(src, dest)` from `avow.improve`.
 - Candidates run **sequentially**; each `solve()` keeps its own per-candidate budget.
 - **No `git commit` without the user's explicit go-ahead** — each task ends with a prepared commit run when greenlit.
 
@@ -20,8 +20,8 @@
 ### Task 1: `select_best` + result dataclasses (pure)
 
 **Files:**
-- Create: `/Users/qatadaha/Coding/hermit/hermit/population.py`
-- Test: `/Users/qatadaha/Coding/hermit/tests/test_population_select.py`
+- Create: `/Users/qatadaha/Coding/avow/avow/population.py`
+- Test: `/Users/qatadaha/Coding/avow/tests/test_population_select.py`
 
 **Interfaces:**
 - Produces: `Candidate(index: int, result, solution_dir)`; `PopulationResult(success, best, candidates, winner_index)`; `select_best(results: list) -> int` — index of the best `SolveResult` by (`success` desc, `confidence` desc with `None` last, `best_score` desc); ties → lowest index; empty → `-1`.
@@ -30,8 +30,8 @@
 
 ```python
 # tests/test_population_select.py
-from hermit.population import select_best
-from hermit.loop import SolveResult
+from avow.population import select_best
+from avow.loop import SolveResult
 
 
 def _r(success, confidence, score=1.0):
@@ -61,13 +61,13 @@ def test_empty_is_minus_one():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_population_select.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'hermit.population'`.
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_population_select.py -q`
+Expected: FAIL — `ModuleNotFoundError: No module named 'avow.population'`.
 
-- [ ] **Step 3: Write `hermit/population.py`**
+- [ ] **Step 3: Write `avow/population.py`**
 
 ```python
-# hermit/population.py
+# avow/population.py
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -105,13 +105,13 @@ def select_best(results: list) -> int:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_population_select.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_population_select.py -q`
 Expected: PASS (5 passed).
 
 - [ ] **Step 5: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/population.py tests/test_population_select.py && git commit -m "feat: select_best — rank candidate solutions by success, confidence, score"
+cd /Users/qatadaha/Coding/avow && git add avow/population.py tests/test_population_select.py && git commit -m "feat: select_best — rank candidate solutions by success, confidence, score"
 ```
 
 ---
@@ -119,8 +119,8 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/population.py tests/test_popu
 ### Task 2: `RunConfig.population_size`
 
 **Files:**
-- Modify: `/Users/qatadaha/Coding/hermit/hermit/config.py`
-- Modify: `/Users/qatadaha/Coding/hermit/tests/test_config.py`
+- Modify: `/Users/qatadaha/Coding/avow/avow/config.py`
+- Modify: `/Users/qatadaha/Coding/avow/tests/test_config.py`
 
 **Interfaces:**
 - `RunConfig` gains `population_size: int = 3`.
@@ -135,10 +135,10 @@ Add to `tests/test_config.py::test_defaults_are_sane`:
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_config.py::test_defaults_are_sane -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_config.py::test_defaults_are_sane -q`
 Expected: FAIL — `AttributeError: ... 'population_size'`.
 
-- [ ] **Step 3: Edit `hermit/config.py`**
+- [ ] **Step 3: Edit `avow/config.py`**
 
 Add after `adversarial_rounds`:
 
@@ -148,13 +148,13 @@ Add after `adversarial_rounds`:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_config.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_config.py -q`
 Expected: PASS.
 
 - [ ] **Step 5: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/config.py tests/test_config.py && git commit -m "feat: population_size setting on RunConfig"
+cd /Users/qatadaha/Coding/avow && git add avow/config.py tests/test_config.py && git commit -m "feat: population_size setting on RunConfig"
 ```
 
 ---
@@ -162,8 +162,8 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/config.py tests/test_config.p
 ### Task 3: `population_solve` + `hybrid_solve`
 
 **Files:**
-- Modify: `/Users/qatadaha/Coding/hermit/hermit/population.py`
-- Test: `/Users/qatadaha/Coding/hermit/tests/test_population.py`
+- Modify: `/Users/qatadaha/Coding/avow/avow/population.py`
+- Test: `/Users/qatadaha/Coding/avow/tests/test_population.py`
 
 **Interfaces:**
 - Produces: `population_solve(goal_dir, config, examiner, builder, *, mutation_client=None, intent_client=None, property_client=None, oracle_client=None, now=time.monotonic) -> PopulationResult`; `hybrid_solve(...same signature...) -> PopulationResult`; helpers `_stage_candidate(goal_dir, cand_dir)`, `_run_candidate_pool(goal_dir, config, examiner, builder, candidates, clients, now)`.
@@ -173,10 +173,10 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/config.py tests/test_config.p
 ```python
 # tests/test_population.py
 from pathlib import Path
-from hermit.config import RunConfig
-from hermit.population import population_solve, hybrid_solve, PopulationResult
-from hermit.examiner import ExaminerResult, TestSuite, TestFile
-from hermit.builder import BuilderOutcome
+from avow.config import RunConfig
+from avow.population import population_solve, hybrid_solve, PopulationResult
+from avow.examiner import ExaminerResult, TestSuite, TestFile
+from avow.builder import BuilderOutcome
 
 
 def _goal(tmp_path: Path) -> Path:
@@ -216,8 +216,8 @@ def test_population_runs_candidates_and_selects(tmp_path):
     assert r.success is True
     assert len(r.candidates) == 2
     assert r.winner_index in (0, 1)
-    assert (tmp_path / ".hermit" / "best" / "lib.py").exists()           # winner promoted
-    assert (tmp_path / ".hermit" / "candidates" / "1" / "tests_frozen").exists()  # candidate 1 staged with a suite copy
+    assert (tmp_path / ".avow" / "best" / "lib.py").exists()           # winner promoted
+    assert (tmp_path / ".avow" / "candidates" / "1" / "tests_frozen").exists()  # candidate 1 staged with a suite copy
 
 
 def test_population_size_one_is_single_solve(tmp_path):
@@ -240,10 +240,10 @@ def test_hybrid_escalates_on_failure(tmp_path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_population.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_population.py -q`
 Expected: FAIL — `ImportError: cannot import name 'population_solve'`.
 
-- [ ] **Step 3: Append to `hermit/population.py`**
+- [ ] **Step 3: Append to `avow/population.py`**
 
 Add the imports at the top (with the existing ones):
 
@@ -252,8 +252,8 @@ import shutil
 import time
 from pathlib import Path
 
-from hermit.loop import solve
-from hermit.improve import _snapshot
+from avow.loop import solve
+from avow.improve import _snapshot
 ```
 
 Append:
@@ -274,15 +274,15 @@ def _stage_candidate(goal_dir, cand_dir) -> None:
 def _run_candidate_pool(goal_dir, config, examiner, builder, candidates, clients, now) -> PopulationResult:
     goal_dir = Path(goal_dir)
     for i in range(len(candidates), max(1, config.population_size)):
-        cand_dir = goal_dir / ".hermit" / "candidates" / str(i)
+        cand_dir = goal_dir / ".avow" / "candidates" / str(i)
         _stage_candidate(goal_dir, cand_dir)
         ri = solve(cand_dir, config, examiner, builder, now=now, write_tests=False, **clients)
-        candidates.append(Candidate(i, ri, cand_dir / ".hermit" / "best"))
+        candidates.append(Candidate(i, ri, cand_dir / ".avow" / "best"))
 
     results = [c.result for c in candidates]
     winner = select_best(results)
     win_dir = candidates[winner].solution_dir
-    dest = goal_dir / ".hermit" / "best"
+    dest = goal_dir / ".avow" / "best"
     if winner != 0 and Path(win_dir).exists():
         _snapshot(win_dir, dest)
     return PopulationResult(success=results[winner].success, best=results[winner],
@@ -296,7 +296,7 @@ def population_solve(goal_dir, config, examiner, builder, *, mutation_client=Non
     clients = dict(mutation_client=mutation_client, intent_client=intent_client,
                    property_client=property_client, oracle_client=oracle_client)
     r0 = solve(goal_dir, config, examiner, builder, now=now, write_tests=True, **clients)
-    candidates = [Candidate(0, r0, goal_dir / ".hermit" / "best")]
+    candidates = [Candidate(0, r0, goal_dir / ".avow" / "best")]
     return _run_candidate_pool(goal_dir, config, examiner, builder, candidates, clients, now)
 
 
@@ -307,7 +307,7 @@ def hybrid_solve(goal_dir, config, examiner, builder, *, mutation_client=None,
     clients = dict(mutation_client=mutation_client, intent_client=intent_client,
                    property_client=property_client, oracle_client=oracle_client)
     r0 = solve(goal_dir, config, examiner, builder, now=now, write_tests=True, **clients)
-    candidates = [Candidate(0, r0, goal_dir / ".hermit" / "best")]
+    candidates = [Candidate(0, r0, goal_dir / ".avow" / "best")]
     if r0.success:
         return PopulationResult(success=True, best=r0, candidates=candidates, winner_index=0)
     return _run_candidate_pool(goal_dir, config, examiner, builder, candidates, clients, now)
@@ -315,30 +315,30 @@ def hybrid_solve(goal_dir, config, examiner, builder, *, mutation_client=None,
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_population.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_population.py -q`
 Expected: PASS (4 passed). (Runs real pytest subprocesses via the Runner — venv must be active.)
 
 - [ ] **Step 5: Run the whole suite**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest -q`
 Expected: PASS, 0 warnings.
 
 - [ ] **Step 6: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/population.py tests/test_population.py && git commit -m "feat: population_solve + hybrid_solve — N candidates, verifier picks the winner"
+cd /Users/qatadaha/Coding/avow && git add avow/population.py tests/test_population.py && git commit -m "feat: population_solve + hybrid_solve — N candidates, verifier picks the winner"
 ```
 
 ---
 
-### Task 4: `hermit population` CLI
+### Task 4: `avow population` CLI
 
 **Files:**
-- Modify: `/Users/qatadaha/Coding/hermit/hermit/cli.py`
-- Test: `/Users/qatadaha/Coding/hermit/tests/test_cli_population.py`
+- Modify: `/Users/qatadaha/Coding/avow/avow/cli.py`
+- Test: `/Users/qatadaha/Coding/avow/tests/test_cli_population.py`
 
 **Interfaces:**
-- New subcommand: `hermit population <goal_dir> [--config hermit.yaml] [--no-llm-verify] [--hybrid]`. Builds the Examiner + Builder + a shared verify client (unless `--no-llm-verify`), runs `hybrid_solve` (with `--hybrid`) or `population_solve`, prints the winner + a line per candidate. The existing subcommands are unchanged.
+- New subcommand: `avow population <goal_dir> [--config avow.yaml] [--no-llm-verify] [--hybrid]`. Builds the Examiner + Builder + a shared verify client (unless `--no-llm-verify`), runs `hybrid_solve` (with `--hybrid`) or `population_solve`, prints the winner + a line per candidate. The existing subcommands are unchanged.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -346,9 +346,9 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/population.py tests/test_popu
 # tests/test_cli_population.py
 from pathlib import Path
 from types import SimpleNamespace
-import hermit.cli as cli
-from hermit.examiner import TestSuite, TestFile
-from hermit.builder import BuilderOutcome
+import avow.cli as cli
+from avow.examiner import TestSuite, TestFile
+from avow.builder import BuilderOutcome
 
 
 class DispatchClient:
@@ -362,16 +362,16 @@ class DispatchClient:
             po = TestSuite(test_plan="add", tests=[TestFile(
                 path="test_add.py", content="from lib import add\ndef test_add():\n    assert add(2, 3) == 5\n")])
         elif name == "_InferredGoal":
-            from hermit.backtranslation import _InferredGoal
+            from avow.backtranslation import _InferredGoal
             po = _InferredGoal(inferred_goal="add two integers")
         elif name == "IntentMatch":
-            from hermit.backtranslation import IntentMatch
+            from avow.backtranslation import IntentMatch
             po = IntentMatch(score=0.9, divergences=[])
         elif name == "_PropertySet":
-            from hermit.properties import _PropertySet
+            from avow.properties import _PropertySet
             po = _PropertySet(tests=[])
         else:  # _OraclePair
-            from hermit.oracle import _OraclePair
+            from avow.oracle import _OraclePair
             po = _OraclePair(reference_code="def add(a, b):\n    return a + b\n",
                              diff_test_code=("from lib import add as _sol\nfrom ref import add as _ref\n"
                                              "from hypothesis import given, strategies as st\n"
@@ -390,12 +390,12 @@ class StubBuilder:
 
 
 def _cfg(tmp_path):
-    p = tmp_path / "hermit.yaml"
+    p = tmp_path / "avow.yaml"
     p.write_text("population_size: 2\nholdout_fraction: 0.0\nmax_iterations: 5\n")
     return p
 
 
-def test_hermit_population_cli(tmp_path, capsys, monkeypatch):
+def test_avow_population_cli(tmp_path, capsys, monkeypatch):
     (tmp_path / "goal.md").write_text("Build add(a, b) returning a + b.")
     import anthropic
     monkeypatch.setattr(anthropic, "Anthropic", lambda *a, **k: DispatchClient())
@@ -410,10 +410,10 @@ def test_hermit_population_cli(tmp_path, capsys, monkeypatch):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_cli_population.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_cli_population.py -q`
 Expected: FAIL — argparse `invalid choice: 'population'`.
 
-- [ ] **Step 3: Edit `hermit/cli.py`**
+- [ ] **Step 3: Edit `avow/cli.py`**
 
 Add the subparser inside `main` (after the `harden` subparser, before `parse_args`):
 
@@ -438,7 +438,7 @@ Add the handler at module level:
 
 ```python
 def _cmd_population(args) -> int:
-    from hermit.population import population_solve, hybrid_solve
+    from avow.population import population_solve, hybrid_solve
 
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
     examiner = build_examiner(config)
@@ -464,25 +464,25 @@ def _cmd_population(args) -> int:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_cli_population.py tests/test_cli.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_cli_population.py tests/test_cli.py -q`
 Expected: PASS (population CLI + the unchanged subcommands).
 
 - [ ] **Step 5: Run the whole suite + smoke the entry point**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest -q && hermit --help`
-Expected: all tests PASS, 0 warnings; `hermit --help` lists `solve`, `improve`, `harden`, `population`, `mutate`, `intent-check`, `verify`, `propertize`, `oracle`.
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest -q && avow --help`
+Expected: all tests PASS, 0 warnings; `avow --help` lists `solve`, `improve`, `harden`, `population`, `mutate`, `intent-check`, `verify`, `propertize`, `oracle`.
 
 - [ ] **Step 6: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/cli.py tests/test_cli_population.py && git commit -m "feat: hermit population CLI — N-candidate search, verifier picks the winner (--hybrid)"
+cd /Users/qatadaha/Coding/avow && git add avow/cli.py tests/test_cli_population.py && git commit -m "feat: avow population CLI — N-candidate search, verifier picks the winner (--hybrid)"
 ```
 
 ---
 
 ## Manual validation (after Task 4, with credentials)
 
-`hermit population ~/Coding/hermit-demo-full --config <caps>` → builds N candidate solutions against the same suite and reports which the verifier picked (and each candidate's confidence). `--hybrid` runs one attempt first and only escalates if it doesn't go green-and-confident.
+`avow population ~/Coding/avow-demo-full --config <caps>` → builds N candidate solutions against the same suite and reports which the verifier picked (and each candidate's confidence). `--hybrid` runs one attempt first and only escalates if it doesn't go green-and-confident.
 
 ## What this deliberately does NOT do (later)
 

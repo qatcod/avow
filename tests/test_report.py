@@ -1,6 +1,6 @@
 from pathlib import Path
-from hermit.report import discover, run_report
-from hermit.config import RunConfig
+from avow.report import discover, run_report
+from avow.config import RunConfig
 
 
 def _mini_repo(tmp_path: Path):
@@ -42,10 +42,10 @@ def test_report_missing_tests_is_honest(tmp_path):
 
 
 def test_report_cli_prints_line_numbered_gaps(tmp_path, monkeypatch, capsys):
-    import hermit.report as rmod
-    import hermit.cli as cli
-    from hermit.report import RepoReport
-    from hermit.mutation import Survivor
+    import avow.report as rmod
+    import avow.cli as cli
+    from avow.report import RepoReport
+    from avow.mutation import Survivor
     rep = RepoReport(True, 0.75, 4, 3,
                      survivors=[Survivor("mypkg/calc.py", "Const 0->1", "ast", 12)],
                      source_files=[Path("mypkg/calc.py")], test_files=[Path("tests/test_calc.py")])

@@ -1,7 +1,7 @@
 from pathlib import Path
 from types import SimpleNamespace
-import hermit.cli as cli
-from hermit.backtranslation import _InferredGoal, IntentMatch
+import avow.cli as cli
+from avow.backtranslation import _InferredGoal, IntentMatch
 
 
 class FakeClient:

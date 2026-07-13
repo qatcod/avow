@@ -1,6 +1,6 @@
-# Hermit — Reference-Oracle as a Converge Target — Design Spec
+# Avow — Reference-Oracle as a Converge Target — Design Spec
 
-**Status:** Approved (2026-06-29). A beyond-design upgrade to the reference-oracle ([oracle spec](2026-06-27-hermit-reference-oracle-design.md), which shipped the oracle as a *post-green signal* and named "the reference as a converge target" as explicit future work).
+**Status:** Approved (2026-06-29). A beyond-design upgrade to the reference-oracle ([oracle spec](2026-06-27-avow-reference-oracle-design.md), which shipped the oracle as a *post-green signal* and named "the reference as a converge target" as explicit future work).
 
 ## Goal
 
@@ -24,7 +24,7 @@ The Builder then converges against the grown suite (Examiner tests + property te
 
 ## Components
 
-- `hermit/loop.py`: the `write_tests` block gains the oracle-converge-target hook (imports `generate_oracle` from `hermit.oracle` and `TestFile` from `hermit.examiner`); `solve` already takes `oracle_client`. No new `solve` parameter.
+- `avow/loop.py`: the `write_tests` block gains the oracle-converge-target hook (imports `generate_oracle` from `avow.oracle` and `TestFile` from `avow.examiner`); `solve` already takes `oracle_client`. No new `solve` parameter.
 - `RunConfig` gains `oracle_converge_target: bool = False`.
 
 ## Honest framing & limitations

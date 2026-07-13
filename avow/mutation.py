@@ -1,4 +1,4 @@
-# hermit/mutation.py
+# avow/mutation.py
 from __future__ import annotations
 
 import ast
@@ -9,7 +9,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from hermit.runner import Runner
+from avow.runner import Runner
 
 
 @dataclass
@@ -103,7 +103,7 @@ class _Mutator(ast.NodeTransformer):
                 return ast.copy_location(ast.Constant(v + 1), node)
         elif isinstance(v, str):
             if self._hit("Const str->" + ("empty" if v else "nonempty"), node):
-                return ast.copy_location(ast.Constant("" if v else "hermit_mutant"), node)
+                return ast.copy_location(ast.Constant("" if v else "avow_mutant"), node)
         return node
 
     def visit_Return(self, node):
@@ -207,7 +207,7 @@ def run_mutation_testing(
     killed = 0
     survivors: list[Survivor] = []
     for mod_name, mut in pool:
-        with tempfile.TemporaryDirectory(prefix="hermit-mut-") as tmp:
+        with tempfile.TemporaryDirectory(prefix="avow-mut-") as tmp:
             sol = Path(tmp) / "sol"
             shutil.copytree(solution_dir, sol)
             (sol / mod_name).write_text(mut.source, encoding="utf-8")

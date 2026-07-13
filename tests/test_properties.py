@@ -1,6 +1,6 @@
 from types import SimpleNamespace
-from hermit.properties import generate_property_tests, _PropertySet
-from hermit.examiner import TestFile
+from avow.properties import generate_property_tests, _PropertySet
+from avow.examiner import TestFile
 
 
 class FakeMessages:

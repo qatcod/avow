@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from hermit.scoring import FailureInfo, TestResult, parse_report
+from avow.scoring import FailureInfo, TestResult, parse_report
 
 
 class Runner:
@@ -24,7 +24,7 @@ class Runner:
         self.timeout = timeout
 
     def run(self) -> TestResult:
-        with tempfile.TemporaryDirectory(prefix="hermit-grade-") as tmp:
+        with tempfile.TemporaryDirectory(prefix="avow-grade-") as tmp:
             graded = Path(tmp) / "graded"
             shutil.copytree(self.solution_dir, graded)
             # Anti-cheat: grade ONLY against the frozen suite. Strip any builder-authored

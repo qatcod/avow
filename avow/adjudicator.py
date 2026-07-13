@@ -1,4 +1,4 @@
-# hermit/adjudicator.py
+# avow/adjudicator.py
 from __future__ import annotations
 
 import json
@@ -8,7 +8,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from hermit.oracle import generate_oracle
+from avow.oracle import generate_oracle
 
 
 @dataclass
@@ -40,7 +40,7 @@ def _run_tests_against(impl_code, frozen_dir, failing_nodeids, test_command, tim
     matched by basename::testfunc so a grading-cwd prefix on the nodeid doesn't break lookup."""
     frozen_dir = Path(frozen_dir)
     files = sorted({Path(nid.split("::")[0]).name for nid in failing_nodeids})
-    with tempfile.TemporaryDirectory(prefix="hermit-adj-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="avow-adj-") as tmp:
         work = Path(tmp)
         (work / "lib.py").write_text(impl_code, encoding="utf-8")
         for fname in files:

@@ -1,16 +1,16 @@
-# Hermit — The Supervisor — Implementation Plan
+# Avow — The Supervisor — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
 
 **Goal:** An event-triggered, judges-not-enforces, off-by-default Supervisor that reviews a plateauing run's trajectory and recommends continue/redirect/escalate; the deterministic loop adjudicates.
 
-**Architecture:** A new `hermit/supervisor.py` (`review_trajectory`), an opt-in loop hook that fires once on plateau (redirect-hint or escalate-stop), and a `hermit supervise` CLI. `solve()`'s floor (budget/plateau/stops) is unchanged and remains authoritative.
+**Architecture:** A new `avow/supervisor.py` (`review_trajectory`), an opt-in loop hook that fires once on plateau (redirect-hint or escalate-stop), and a `avow supervise` CLI. `solve()`'s floor (budget/plateau/stops) is unchanged and remains authoritative.
 
-**Tech Stack:** Python 3.12 · `anthropic` structured outputs · integrates with `hermit.loop`/`hermit.config`/`hermit.cli`.
+**Tech Stack:** Python 3.12 · `anthropic` structured outputs · integrates with `avow.loop`/`avow.config`/`avow.cli`.
 
 ## Global Constraints
 
-- Python **3.11+** (Hermit-local venv at `/Users/qatadaha/Coding/hermit/.venv`, 3.12). Activate it for every command: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && <cmd>`.
+- Python **3.11+** (Avow-local venv at `/Users/qatadaha/Coding/avow/.venv`, 3.12). Activate it for every command: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && <cmd>`.
 - Model IDs exact, no date suffixes. `supervisor_model` defaults to `claude-opus-4-8`.
 - LLM call uses `client.messages.parse(..., output_format=SupervisorVerdict)` → `.parsed_output`, `.usage`; never set `temperature`/`top_p`/`top_k`. Injectable client; tests use fakes.
 - **The Supervisor ships DORMANT** (`supervisor_enabled = False`); it must NOT change default loop behavior. Reuses verified interfaces (do NOT modify their contracts): `solve(...)`/`SolveResult`/`AttemptRecord`/`RunLog`/`Budget.charge_tokens`.
@@ -21,8 +21,8 @@
 ### Task 1: `review_trajectory` + `SupervisorVerdict`
 
 **Files:**
-- Create: `/Users/qatadaha/Coding/hermit/hermit/supervisor.py`
-- Test: `/Users/qatadaha/Coding/hermit/tests/test_supervisor.py`
+- Create: `/Users/qatadaha/Coding/avow/avow/supervisor.py`
+- Test: `/Users/qatadaha/Coding/avow/tests/test_supervisor.py`
 
 **Interfaces:**
 - Produces: `SupervisorVerdict(BaseModel)` with `assessment: str`, `recommendation: str`, `escalate: bool`; `review_trajectory(goal, history, client, model) -> tuple[SupervisorVerdict | None, int, int]`. `(None, 0, 0)` when `client is None`. `history` items are read for `.iteration`, `.score`, `.is_green`, `.failing`, `.plan`.
@@ -32,7 +32,7 @@
 ```python
 # tests/test_supervisor.py
 from types import SimpleNamespace
-from hermit.supervisor import review_trajectory, SupervisorVerdict
+from avow.supervisor import review_trajectory, SupervisorVerdict
 
 
 class FakeMessages:
@@ -74,13 +74,13 @@ def test_review_trajectory_noop_without_client():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_supervisor.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'hermit.supervisor'`.
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_supervisor.py -q`
+Expected: FAIL — `ModuleNotFoundError: No module named 'avow.supervisor'`.
 
-- [ ] **Step 3: Write `hermit/supervisor.py`**
+- [ ] **Step 3: Write `avow/supervisor.py`**
 
 ```python
-# hermit/supervisor.py
+# avow/supervisor.py
 from __future__ import annotations
 
 from pydantic import BaseModel
@@ -142,13 +142,13 @@ def review_trajectory(goal, history, client, model) -> tuple:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_supervisor.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_supervisor.py -q`
 Expected: PASS (2 passed).
 
 - [ ] **Step 5: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/supervisor.py tests/test_supervisor.py && git commit -m "feat: Supervisor review_trajectory — judge a plateauing run and recommend"
+cd /Users/qatadaha/Coding/avow && git add avow/supervisor.py tests/test_supervisor.py && git commit -m "feat: Supervisor review_trajectory — judge a plateauing run and recommend"
 ```
 
 ---
@@ -156,8 +156,8 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/supervisor.py tests/test_supe
 ### Task 2: `RunConfig` supervisor settings (dormant)
 
 **Files:**
-- Modify: `/Users/qatadaha/Coding/hermit/hermit/config.py`
-- Modify: `/Users/qatadaha/Coding/hermit/tests/test_config.py`
+- Modify: `/Users/qatadaha/Coding/avow/avow/config.py`
+- Modify: `/Users/qatadaha/Coding/avow/tests/test_config.py`
 
 **Interfaces:**
 - `RunConfig` gains `supervisor_enabled: bool = False`, `supervisor_model: str = "claude-opus-4-8"`, `supervisor_patience: int = 2`.
@@ -174,10 +174,10 @@ Add to `tests/test_config.py::test_defaults_are_sane`:
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_config.py::test_defaults_are_sane -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_config.py::test_defaults_are_sane -q`
 Expected: FAIL — `AttributeError: ... 'supervisor_enabled'`.
 
-- [ ] **Step 3: Edit `hermit/config.py`**
+- [ ] **Step 3: Edit `avow/config.py`**
 
 Add after `population_size`:
 
@@ -189,13 +189,13 @@ Add after `population_size`:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_config.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_config.py -q`
 Expected: PASS.
 
 - [ ] **Step 5: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/config.py tests/test_config.py && git commit -m "feat: dormant Supervisor settings on RunConfig"
+cd /Users/qatadaha/Coding/avow && git add avow/config.py tests/test_config.py && git commit -m "feat: dormant Supervisor settings on RunConfig"
 ```
 
 ---
@@ -203,14 +203,14 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/config.py tests/test_config.p
 ### Task 3: Loop hook — event-triggered Supervisor (dormant by default)
 
 **Files:**
-- Modify: `/Users/qatadaha/Coding/hermit/hermit/loop.py`
-- Modify: `/Users/qatadaha/Coding/hermit/tests/test_loop.py`
+- Modify: `/Users/qatadaha/Coding/avow/avow/loop.py`
+- Modify: `/Users/qatadaha/Coding/avow/tests/test_loop.py`
 
 **Interfaces:**
-- `solve` gains keyword-only `supervisor_client=None` (after `oracle_client`). Imports `review_trajectory` from `hermit.supervisor`.
+- `solve` gains keyword-only `supervisor_client=None` (after `oracle_client`). Imports `review_trajectory` from `avow.supervisor`.
 
-**Edits (read `hermit/loop.py` to confirm the exact current lines first):**
-1. Import: `from hermit.supervisor import review_trajectory`.
+**Edits (read `avow/loop.py` to confirm the exact current lines first):**
+1. Import: `from avow.supervisor import review_trajectory`.
 2. Add `supervisor_client=None` to `solve`'s keyword-only params (after `oracle_client=None`).
 3. Before the `while True:` loop, initialize: `attempt_history: list = []`, `supervisor_fired = False`, `supervisor_hint = None`.
 4. The builder attempt currently reads `outcome = builder.attempt(workspace.solution_dir, goal, best_failures)`. Replace with:
@@ -262,14 +262,14 @@ class AlwaysWrongBuilder:
     """Never converges: writes a wrong implementation every attempt."""
     def attempt(self, solution_dir, goal, failures):
         from pathlib import Path as _P
-        from hermit.builder import BuilderOutcome
+        from avow.builder import BuilderOutcome
         (_P(solution_dir) / "lib.py").write_text("def add(a, b):\n    return a - b\n")
         return BuilderOutcome(plan="still wrong", cost_usd=0.0, raw={})
 
 
 def _fake_supervisor(recommendation, escalate):
     from types import SimpleNamespace
-    from hermit.supervisor import SupervisorVerdict
+    from avow.supervisor import SupervisorVerdict
 
     class _C:
         @property
@@ -307,37 +307,37 @@ def test_loop_supervisor_dormant_by_default(tmp_path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_loop.py::test_loop_supervisor_escalates -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_loop.py::test_loop_supervisor_escalates -q`
 Expected: FAIL — `TypeError: solve() got an unexpected keyword argument 'supervisor_client'`.
 
-- [ ] **Step 3: Apply the edits above to `hermit/loop.py`**
+- [ ] **Step 3: Apply the edits above to `avow/loop.py`**
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_loop.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_loop.py -q`
 Expected: PASS — the three new tests + all existing loop tests (which pass no `supervisor_client` and leave it disabled → the hook never fires → identical behavior).
 
 - [ ] **Step 5: Run the whole suite**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest -q`
 Expected: PASS, 0 warnings.
 
 - [ ] **Step 6: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/loop.py tests/test_loop.py && git commit -m "feat: event-triggered Supervisor hook in the loop (dormant by default; redirect/escalate)"
+cd /Users/qatadaha/Coding/avow && git add avow/loop.py tests/test_loop.py && git commit -m "feat: event-triggered Supervisor hook in the loop (dormant by default; redirect/escalate)"
 ```
 
 ---
 
-### Task 4: `hermit supervise` CLI
+### Task 4: `avow supervise` CLI
 
 **Files:**
-- Modify: `/Users/qatadaha/Coding/hermit/hermit/cli.py`
-- Test: `/Users/qatadaha/Coding/hermit/tests/test_cli_supervise.py`
+- Modify: `/Users/qatadaha/Coding/avow/avow/cli.py`
+- Test: `/Users/qatadaha/Coding/avow/tests/test_cli_supervise.py`
 
 **Interfaces:**
-- New subcommand: `hermit supervise <run_jsonl> <goal_file> [--config]`. Reads the recorded `run.jsonl` into a trajectory, runs `review_trajectory`, prints the verdict. The existing subcommands are unchanged.
+- New subcommand: `avow supervise <run_jsonl> <goal_file> [--config]`. Reads the recorded `run.jsonl` into a trajectory, runs `review_trajectory`, prints the verdict. The existing subcommands are unchanged.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -346,8 +346,8 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/loop.py tests/test_loop.py &&
 import json
 from pathlib import Path
 from types import SimpleNamespace
-import hermit.cli as cli
-from hermit.supervisor import SupervisorVerdict
+import avow.cli as cli
+from avow.supervisor import SupervisorVerdict
 
 
 class FakeClient:
@@ -380,10 +380,10 @@ def test_supervise_cli(tmp_path, capsys, monkeypatch):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_cli_supervise.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_cli_supervise.py -q`
 Expected: FAIL — argparse `invalid choice: 'supervise'`.
 
-- [ ] **Step 3: Edit `hermit/cli.py`**
+- [ ] **Step 3: Edit `avow/cli.py`**
 
 Add the subparser inside `main` (after the `population` subparser, before `parse_args`):
 
@@ -409,7 +409,7 @@ def _cmd_supervise(args) -> int:
     import json
     from types import SimpleNamespace
     import anthropic
-    from hermit.supervisor import review_trajectory
+    from avow.supervisor import review_trajectory
 
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
     goal = Path(args.goal_file).read_text(encoding="utf-8")
@@ -431,25 +431,25 @@ def _cmd_supervise(args) -> int:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_cli_supervise.py tests/test_cli.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_cli_supervise.py tests/test_cli.py -q`
 Expected: PASS (supervise CLI + the unchanged subcommands).
 
 - [ ] **Step 5: Run the whole suite + smoke the entry point**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest -q && hermit --help`
-Expected: all tests PASS, 0 warnings; `hermit --help` lists `solve`, `improve`, `harden`, `population`, `mutate`, `intent-check`, `verify`, `propertize`, `oracle`, `supervise`.
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest -q && avow --help`
+Expected: all tests PASS, 0 warnings; `avow --help` lists `solve`, `improve`, `harden`, `population`, `mutate`, `intent-check`, `verify`, `propertize`, `oracle`, `supervise`.
 
 - [ ] **Step 6: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/cli.py tests/test_cli_supervise.py && git commit -m "feat: hermit supervise CLI — review a recorded run's trajectory"
+cd /Users/qatadaha/Coding/avow && git add avow/cli.py tests/test_cli_supervise.py && git commit -m "feat: avow supervise CLI — review a recorded run's trajectory"
 ```
 
 ---
 
 ## Manual validation (after Task 4)
 
-`hermit supervise ~/Coding/hermit-demo-full/.hermit/run.jsonl ~/Coding/hermit-demo-full/goal.md` → prints the Supervisor's read of that run. To see it in-loop, run `hermit solve` on a hard goal with a `hermit.yaml` setting `supervisor_enabled: true` (then it fires once on plateau and may redirect or escalate).
+`avow supervise ~/Coding/avow-demo-full/.avow/run.jsonl ~/Coding/avow-demo-full/goal.md` → prints the Supervisor's read of that run. To see it in-loop, run `avow solve` on a hard goal with a `avow.yaml` setting `supervisor_enabled: true` (then it fires once on plateau and may redirect or escalate).
 
 ## What this deliberately does NOT do (later)
 

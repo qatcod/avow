@@ -1,4 +1,4 @@
-# Hermit — Parallel Candidate Execution — Implementation Plan
+# Avow — Parallel Candidate Execution — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
 
@@ -6,11 +6,11 @@
 
 **Architecture:** Rewrite `_run_candidate_pool` to submit the pool candidates to a `ThreadPoolExecutor` and gather results in candidate-index order. `solve()`/`select_best`/`population_solve`/`hybrid_solve` are unchanged.
 
-**Tech Stack:** Python 3.12 · `concurrent.futures` (threads — `solve()` is subprocess-bound) · `hermit.population` · `hermit.config`.
+**Tech Stack:** Python 3.12 · `concurrent.futures` (threads — `solve()` is subprocess-bound) · `avow.population` · `avow.config`.
 
 ## Global Constraints
 
-- Python **3.11+** (Hermit-local venv at `/Users/qatadaha/Coding/hermit/.venv`, 3.12). Activate it for every command: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && <cmd>`.
+- Python **3.11+** (Avow-local venv at `/Users/qatadaha/Coding/avow/.venv`, 3.12). Activate it for every command: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && <cmd>`.
 - **Determinism is load-bearing:** results MUST be appended to `candidates` in candidate-INDEX order (not completion order), so `select_best` (ties → lowest index) returns the identical winner the sequential path does. Parallelism changes speed only, never outcome.
 - Candidates are isolated (each writes only into its own `candidates/{i}/` dir); a worker exception must NOT abort the others.
 - Reuses verified interfaces (do NOT modify): `solve(...)`, `select_best`, `_stage_candidate`, `_snapshot`, `Candidate`, `PopulationResult`. Candidate 0 is NOT parallelized (it writes the shared suite first, in `population_solve`/`hybrid_solve`).
@@ -21,8 +21,8 @@
 ### Task 1: `RunConfig.max_parallel_candidates`
 
 **Files:**
-- Modify: `/Users/qatadaha/Coding/hermit/hermit/config.py`
-- Modify: `/Users/qatadaha/Coding/hermit/tests/test_config.py`
+- Modify: `/Users/qatadaha/Coding/avow/avow/config.py`
+- Modify: `/Users/qatadaha/Coding/avow/tests/test_config.py`
 
 **Interfaces:**
 - `RunConfig` gains `max_parallel_candidates: int = 4`.
@@ -37,10 +37,10 @@ Add to `tests/test_config.py::test_defaults_are_sane`:
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_config.py::test_defaults_are_sane -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_config.py::test_defaults_are_sane -q`
 Expected: FAIL — `AttributeError: ... 'max_parallel_candidates'`.
 
-- [ ] **Step 3: Edit `hermit/config.py`**
+- [ ] **Step 3: Edit `avow/config.py`**
 
 Add after `population_size`:
 
@@ -50,13 +50,13 @@ Add after `population_size`:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_config.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_config.py -q`
 Expected: PASS.
 
 - [ ] **Step 5: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/config.py tests/test_config.py && git commit -m "feat: max_parallel_candidates setting on RunConfig"
+cd /Users/qatadaha/Coding/avow && git add avow/config.py tests/test_config.py && git commit -m "feat: max_parallel_candidates setting on RunConfig"
 ```
 
 ---
@@ -64,8 +64,8 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/config.py tests/test_config.p
 ### Task 2: Parallelize `_run_candidate_pool`
 
 **Files:**
-- Modify: `/Users/qatadaha/Coding/hermit/hermit/population.py`
-- Modify: `/Users/qatadaha/Coding/hermit/tests/test_population.py`
+- Modify: `/Users/qatadaha/Coding/avow/avow/population.py`
+- Modify: `/Users/qatadaha/Coding/avow/tests/test_population.py`
 
 **Interfaces:**
 - Produces: `_solve_candidate(goal_dir, i, config, examiner, builder, clients, now) -> Candidate` (stage + solve one pool candidate). `_run_candidate_pool` runs the pool candidates via `concurrent.futures.ThreadPoolExecutor`, collecting results in index order, tolerating a worker exception.
@@ -81,9 +81,9 @@ def test_population_parallel_outcome_matches(tmp_path):
     assert r.success is True
     assert len(r.candidates) == 3
     assert [c.index for c in r.candidates] == [0, 1, 2]   # index order preserved (deterministic)
-    assert (tmp_path / ".hermit" / "best" / "lib.py").exists()
-    assert (tmp_path / ".hermit" / "candidates" / "1" / "tests_frozen").exists()
-    assert (tmp_path / ".hermit" / "candidates" / "2" / "tests_frozen").exists()
+    assert (tmp_path / ".avow" / "best" / "lib.py").exists()
+    assert (tmp_path / ".avow" / "candidates" / "1" / "tests_frozen").exists()
+    assert (tmp_path / ".avow" / "candidates" / "2" / "tests_frozen").exists()
 
 
 def test_population_sequential_when_max_parallel_one(tmp_path):
@@ -94,14 +94,14 @@ def test_population_sequential_when_max_parallel_one(tmp_path):
 
 def test_pool_tolerates_a_failing_candidate(tmp_path):
     from types import SimpleNamespace
-    from hermit.population import _run_candidate_pool, Candidate
+    from avow.population import _run_candidate_pool, Candidate
 
     (tmp_path / "goal.md").write_text("Build add(a, b).")
     (tmp_path / "tests_frozen").mkdir()
     (tmp_path / "tests_frozen" / "test_add.py").write_text(
         "from lib import add\ndef test_add():\n    assert add(2, 3) == 5\n")
     (tmp_path / "tests_holdout").mkdir()
-    best0 = tmp_path / ".hermit" / "best"
+    best0 = tmp_path / ".avow" / "best"
     best0.mkdir(parents=True)
     (best0 / "lib.py").write_text("def add(a, b):\n    return a + b\n")
     cand0 = Candidate(0, SimpleNamespace(success=True, confidence=1.0, best_score=1.0,
@@ -123,10 +123,10 @@ def test_pool_tolerates_a_failing_candidate(tmp_path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_population.py::test_pool_tolerates_a_failing_candidate -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_population.py::test_pool_tolerates_a_failing_candidate -q`
 Expected: FAIL — `ImportError: cannot import name '_solve_candidate'` (or the failing-candidate path crashes the pool).
 
-- [ ] **Step 3: Edit `hermit/population.py`**
+- [ ] **Step 3: Edit `avow/population.py`**
 
 Add the import at the top (with the existing ones):
 
@@ -139,10 +139,10 @@ Add the per-candidate worker (near `_run_candidate_pool`):
 
 ```python
 def _solve_candidate(goal_dir, i, config, examiner, builder, clients, now) -> Candidate:
-    cand_dir = Path(goal_dir) / ".hermit" / "candidates" / str(i)
+    cand_dir = Path(goal_dir) / ".avow" / "candidates" / str(i)
     _stage_candidate(goal_dir, cand_dir)
     ri = solve(cand_dir, config, examiner, builder, now=now, write_tests=False, **clients)
-    return Candidate(i, ri, cand_dir / ".hermit" / "best")
+    return Candidate(i, ri, cand_dir / ".avow" / "best")
 ```
 
 Replace the body of `_run_candidate_pool` (keep the signature) with the parallel version:
@@ -175,7 +175,7 @@ def _run_candidate_pool(goal_dir, config, examiner, builder, candidates, clients
 
     results = [c.result for c in candidates]
     winner = select_best(results)
-    dest = goal_dir / ".hermit" / "best"
+    dest = goal_dir / ".avow" / "best"
     if winner != 0:
         win_dir = candidates[winner].solution_dir
         if win_dir is not None and Path(win_dir).exists():
@@ -190,25 +190,25 @@ def _run_candidate_pool(goal_dir, config, examiner, builder, candidates, clients
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_population.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_population.py -q`
 Expected: PASS — the 3 new tests + the existing population tests (which now run through the parallel pool with identical, index-ordered outcomes).
 
 - [ ] **Step 5: Run the whole suite**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest -q`
 Expected: PASS, 0 warnings.
 
 - [ ] **Step 6: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/population.py tests/test_population.py && git commit -m "feat: run Population candidates in parallel (thread pool, deterministic index-ordered selection)"
+cd /Users/qatadaha/Coding/avow && git add avow/population.py tests/test_population.py && git commit -m "feat: run Population candidates in parallel (thread pool, deterministic index-ordered selection)"
 ```
 
 ---
 
 ## Manual validation (after Task 2, with credentials)
 
-`hermit population <goal-dir>` on a real goal with `population_size: 3` now runs the 3 candidates concurrently — wall-time ≈ the slowest single candidate rather than the sum. Set `max_parallel_candidates: 1` in `hermit.yaml` to fall back to sequential on a constrained machine or tight rate limit.
+`avow population <goal-dir>` on a real goal with `population_size: 3` now runs the 3 candidates concurrently — wall-time ≈ the slowest single candidate rather than the sum. Set `max_parallel_candidates: 1` in `avow.yaml` to fall back to sequential on a constrained machine or tight rate limit.
 
 ## What this deliberately does NOT do (later)
 

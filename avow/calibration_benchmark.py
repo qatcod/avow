@@ -3,7 +3,7 @@ reference, a deliberately imperfect test suite (gaps where bugs can hide), and
 injected bugs that PASS that suite but are actually wrong (green-but-wrong) plus
 some that the suite catches. Oracles are pure-Python references (no external deps).
 Extend this list to harden the reliability estimate."""
-from hermit.calibration import CalibrationGoal
+from avow.calibration import CalibrationGoal
 
 # --------------------------------------------------------------------- roman
 _R = [(1000, "M"), (900, "CM"), (500, "D"), (400, "CD"), (100, "C"), (90, "XC"),

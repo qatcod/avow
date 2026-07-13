@@ -1,10 +1,10 @@
-# Hermit — Grounded Test-vs-Solution Conflict Adjudicator — Design Spec
+# Avow — Grounded Test-vs-Solution Conflict Adjudicator — Design Spec
 
 **Status:** Approved (2026-07-01). A refinement that turns the moat's cross-checks into an *adjudicator*: when a build stalls just short of green, decide — by **execution, not opinion** — whether a failing test is the *solution's* bug or the *Examiner's* bug.
 
 ## Goal
 
-A frozen test failing is *usually* the solution's fault — but sometimes the LLM Examiner writes a wrong/over-strict test that **no correct solution can pass** (e.g. the Roman-numeral demo's `test_m_count`, which forbids the correct `MMMCM`). Today Hermit correctly refuses a fake green but cannot tell the user *which side is wrong*. The adjudicator answers that, grounded in execution.
+A frozen test failing is *usually* the solution's fault — but sometimes the LLM Examiner writes a wrong/over-strict test that **no correct solution can pass** (e.g. the Roman-numeral demo's `test_m_count`, which forbids the correct `MMMCM`). Today Avow correctly refuses a fake green but cannot tell the user *which side is wrong*. The adjudicator answers that, grounded in execution.
 
 ## The core idea (grounded, not an LLM opinion)
 
@@ -27,7 +27,7 @@ The LLM only *generates* the references; **execution casts every vote.** This is
 
 ## Components
 
-`hermit/adjudicator.py`:
+`avow/adjudicator.py`:
 
 | Unit | Job |
 |---|---|
@@ -42,7 +42,7 @@ Reuses `generate_oracle` (the simplest-correct reference generator) and `parse_r
 
 - **Loop hook (opt-in):** `solve` gains `adjudicator_client=None`. When the loop exits **not green** with `best_score >= config.adjudicate_threshold` and `config.adjudicate_enabled` and a client is provided, run `adjudicate_failures` on the best solution's failing tests, charge tokens, record the verdicts in `run.jsonl`, and attach them to the result. `SolveResult` gains `suspected_bad_tests: list` (the `test_bug` verdicts).
 - `RunConfig` gains `adjudicate_enabled: bool = False`, `adjudicate_model: str = "claude-opus-4-8"`, `adjudicate_threshold: float = 0.9`, `adjudicate_references_k: int = 3`.
-- **Standalone CLI:** `hermit adjudicate <solution_dir> <tests_dir> <goal_file>` — runs the solution against the suite to find failures, adjudicates them, and prints a report (`test_m_count: TEST BUG — 3/3 references also fail it`).
+- **Standalone CLI:** `avow adjudicate <solution_dir> <tests_dir> <goal_file>` — runs the solution against the suite to find failures, adjudicates them, and prints a report (`test_m_count: TEST BUG — 3/3 references also fail it`).
 - **Backward compatible:** off by default; existing behavior unchanged when disabled / no client.
 
 ## Testing strategy

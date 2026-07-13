@@ -1,5 +1,5 @@
 from pathlib import Path
-from hermit.mutation import run_mutation_testing
+from avow.mutation import run_mutation_testing
 
 
 CMD = ["python", "-m", "pytest", "-q"]

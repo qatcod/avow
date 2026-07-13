@@ -1,6 +1,6 @@
-# Hermit — Reference-Oracle Differential Testing (Layer I completion) — Design Spec
+# Avow — Reference-Oracle Differential Testing (Layer I completion) — Design Spec
 
-**Status:** Approved (2026-06-27). Completes **Layer I** of the verification moat ([design spec](2026-06-26-hermit-design.md) §"Verification subsystem"): property/metamorphic tests shipped in v2.4; this adds the **reference-oracle-by-simplicity** half.
+**Status:** Approved (2026-06-27). Completes **Layer I** of the verification moat ([design spec](2026-06-26-avow-design.md) §"Verification subsystem"): property/metamorphic tests shipped in v2.4; this adds the **reference-oracle-by-simplicity** half.
 
 ## Goal
 
@@ -18,7 +18,7 @@ The reference implementation is **also LLM-generated**, so it is **not literal g
 
 ## Components
 
-`hermit/oracle.py`:
+`avow/oracle.py`:
 
 | Unit | Job |
 |---|---|
@@ -35,7 +35,7 @@ Reuses `scoring.parse_report` (pytest-json-report) to classify the diff test's o
 - **Oracle floor:** when gating is on and the oracle ran and `agreement is not None and agreement < config.oracle_floor`, force `low_confidence` (a hard disagreement can't be averaged away), with the counterexample recorded in the run log. Mirrors the hold-out / panel-agreement floors. An **inconclusive** oracle (`agreement is None`) neither scores nor floors — it's logged and skipped.
 - `RunConfig` gains `oracle_enabled: bool = True`, `oracle_model: str = "claude-opus-4-8"`, `oracle_floor: float = 1.0` (binary agreement → any disagreement breaches); `confidence_weights` gains `"oracle": 1.0`.
 - `SolveResult` gains `oracle_agreement: float | None = None`.
-- **Standalone:** `hermit oracle <solution_dir> <goal_file>` — generate a reference and differential-test any solution; prints agreement + any counterexample.
+- **Standalone:** `avow oracle <solution_dir> <goal_file>` — generate a reference and differential-test any solution; prints agreement + any counterexample.
 - Injectable `oracle_client`; offline / no-client runs skip the hook.
 
 ## Testing strategy
@@ -47,7 +47,7 @@ Reuses `scoring.parse_report` (pytest-json-report) to classify the diff test's o
   - *inconclusive* — a syntactically broken reference → `baseline_ok is False`, `agreement is None`.
 - `aggregate_confidence`: oracle present → 4-signal mean; oracle `None`/absent → unchanged 3-signal (renormalized).
 - Loop: an `oracle_client` whose pair *disagrees* with the converged solution → `agreement 0.0` → floor → `low_confidence` even with the other signals high; existing loop tests (no `oracle_client`) unchanged.
-- CLI: `hermit oracle` offline via a monkeypatched client → prints agreement.
+- CLI: `avow oracle` offline via a monkeypatched client → prints agreement.
 
 ## Out of scope (later)
 

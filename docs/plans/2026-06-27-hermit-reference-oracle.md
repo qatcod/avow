@@ -1,19 +1,19 @@
-# Hermit — Reference-Oracle Differential Testing — Implementation Plan
+# Avow — Reference-Oracle Differential Testing — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
 
 **Goal:** Generate an independent reference implementation of the goal and differential-test it against the Builder's solution over thousands of fuzzed inputs; disagreement becomes a confidence signal + a floor.
 
-**Architecture:** A new `hermit/oracle.py` (LLM emits a reference + a Hypothesis diff test; `run_oracle_check` runs it in an ephemeral dir → agreement), wired into the loop's post-green block (a new `oracle` confidence signal + an `oracle_floor`). A `hermit oracle` CLI. Mirrors the mutation signal's shape.
+**Architecture:** A new `avow/oracle.py` (LLM emits a reference + a Hypothesis diff test; `run_oracle_check` runs it in an ephemeral dir → agreement), wired into the loop's post-green block (a new `oracle` confidence signal + an `oracle_floor`). A `avow oracle` CLI. Mirrors the mutation signal's shape.
 
-**Tech Stack:** Python 3.12 · `anthropic` structured outputs · `hypothesis` · `pytest-json-report` · reuses `hermit.scoring`/`hermit.loop`/`hermit.config`/`hermit.confidence`.
+**Tech Stack:** Python 3.12 · `anthropic` structured outputs · `hypothesis` · `pytest-json-report` · reuses `avow.scoring`/`avow.loop`/`avow.config`/`avow.confidence`.
 
 ## Global Constraints
 
-- Python **3.11+** (Hermit-local venv at `/Users/qatadaha/Coding/hermit/.venv`, 3.12). Activate it for every command: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && <cmd>`.
+- Python **3.11+** (Avow-local venv at `/Users/qatadaha/Coding/avow/.venv`, 3.12). Activate it for every command: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && <cmd>`.
 - Model IDs exact, no date suffixes. `oracle_model` defaults to `claude-opus-4-8`.
 - LLM call uses `client.messages.parse(..., output_format=_OraclePair)` → `.parsed_output`, `.usage`; never set `temperature`/`top_p`/`top_k`. Injectable client; unit tests use fakes for generation; the *run* path is tested offline with an injected pair (real pytest subprocess, no LLM).
-- Reuses verified interfaces (do NOT modify): `parse_report(data) -> TestResult(passed, failed, errors, total, failures: list[FailureInfo(nodeid, message)])` from `hermit.scoring`; `aggregate_confidence(signals, weights)` already filters present (non-None, weight>0) signals and renormalizes; `RunConfig`; `Budget.charge_tokens`; `RunLog.record(AttemptRecord(...))`; `solve(...)`/`SolveResult` in `hermit.loop`.
+- Reuses verified interfaces (do NOT modify): `parse_report(data) -> TestResult(passed, failed, errors, total, failures: list[FailureInfo(nodeid, message)])` from `avow.scoring`; `aggregate_confidence(signals, weights)` already filters present (non-None, weight>0) signals and renormalizes; `RunConfig`; `Budget.charge_tokens`; `RunLog.record(AttemptRecord(...))`; `solve(...)`/`SolveResult` in `avow.loop`.
 - The differential test imports the solution as `from lib import …` and the reference as `from ref import …`; the oracle stages both in an ephemeral dir (never touches the frozen suite or the Runner).
 - **No `git commit` without the user's explicit go-ahead** — each task ends with a prepared commit run when greenlit.
 
@@ -22,8 +22,8 @@
 ### Task 1: `generate_oracle` (the reference + diff-test pair)
 
 **Files:**
-- Create: `/Users/qatadaha/Coding/hermit/hermit/oracle.py`
-- Test: `/Users/qatadaha/Coding/hermit/tests/test_oracle_gen.py`
+- Create: `/Users/qatadaha/Coding/avow/avow/oracle.py`
+- Test: `/Users/qatadaha/Coding/avow/tests/test_oracle_gen.py`
 
 **Interfaces:**
 - Produces: `_OraclePair(BaseModel)` with `reference_code: str`, `diff_test_code: str`; `generate_oracle(goal: str, client, model: str) -> tuple[_OraclePair | None, int, int]`. `(None, 0, 0)` when `client is None`.
@@ -33,7 +33,7 @@
 ```python
 # tests/test_oracle_gen.py
 from types import SimpleNamespace
-from hermit.oracle import generate_oracle, _OraclePair
+from avow.oracle import generate_oracle, _OraclePair
 
 
 class FakeMessages:
@@ -72,13 +72,13 @@ def test_generate_oracle_noop_without_client():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_oracle_gen.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'hermit.oracle'`.
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_oracle_gen.py -q`
+Expected: FAIL — `ModuleNotFoundError: No module named 'avow.oracle'`.
 
-- [ ] **Step 3: Write `hermit/oracle.py`**
+- [ ] **Step 3: Write `avow/oracle.py`**
 
 ```python
-# hermit/oracle.py
+# avow/oracle.py
 from __future__ import annotations
 
 from pydantic import BaseModel
@@ -130,13 +130,13 @@ def generate_oracle(goal: str, client, model: str) -> tuple[_OraclePair | None, 
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_oracle_gen.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_oracle_gen.py -q`
 Expected: PASS (2 passed).
 
 - [ ] **Step 5: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/oracle.py tests/test_oracle_gen.py && git commit -m "feat: generate a reference impl + Hypothesis differential test for a goal"
+cd /Users/qatadaha/Coding/avow && git add avow/oracle.py tests/test_oracle_gen.py && git commit -m "feat: generate a reference impl + Hypothesis differential test for a goal"
 ```
 
 ---
@@ -144,8 +144,8 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/oracle.py tests/test_oracle_g
 ### Task 2: `run_oracle_check` (differential run → agreement)
 
 **Files:**
-- Modify: `/Users/qatadaha/Coding/hermit/hermit/oracle.py`
-- Test: `/Users/qatadaha/Coding/hermit/tests/test_oracle_run.py`
+- Modify: `/Users/qatadaha/Coding/avow/avow/oracle.py`
+- Test: `/Users/qatadaha/Coding/avow/tests/test_oracle_run.py`
 
 **Interfaces:**
 - Produces: `OracleResult(agreement: float | None, baseline_ok: bool, counterexample: str, checked: bool, input_tokens: int, output_tokens: int)`; `run_oracle_check(solution_dir, goal, client, model, test_command, timeout=120) -> OracleResult`. `agreement=1.0` (diff test passes), `0.0` (a counterexample found), `None` (inconclusive: no pair, error/collection failure, timeout, no report).
@@ -156,7 +156,7 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/oracle.py tests/test_oracle_g
 # tests/test_oracle_run.py
 from pathlib import Path
 from types import SimpleNamespace
-from hermit.oracle import run_oracle_check, _OraclePair
+from avow.oracle import run_oracle_check, _OraclePair
 
 _DIFF = ("from lib import add as _sol\n"
          "from ref import add as _ref\n"
@@ -215,10 +215,10 @@ def test_oracle_inconclusive_without_client(tmp_path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_oracle_run.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_oracle_run.py -q`
 Expected: FAIL — `ImportError: cannot import name 'run_oracle_check'`.
 
-- [ ] **Step 3: Append to `hermit/oracle.py`**
+- [ ] **Step 3: Append to `avow/oracle.py`**
 
 Add the imports at the top (with the existing ones):
 
@@ -230,7 +230,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from hermit.scoring import parse_report
+from avow.scoring import parse_report
 ```
 
 Append:
@@ -256,7 +256,7 @@ def run_oracle_check(solution_dir, goal, client, model, test_command, timeout: i
     if pair is None:
         return _inconclusive(in_tok, out_tok)
 
-    with tempfile.TemporaryDirectory(prefix="hermit-oracle-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="avow-oracle-") as tmp:
         work = Path(tmp)
         for p in Path(solution_dir).glob("*.py"):
             if p.name.startswith("test_") or p.name == "conftest.py":
@@ -292,18 +292,18 @@ def run_oracle_check(solution_dir, goal, client, model, test_command, timeout: i
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_oracle_run.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_oracle_run.py -q`
 Expected: PASS (4 passed). (These run real pytest subprocesses with Hypothesis — the venv must be active.)
 
 - [ ] **Step 5: Run the whole suite**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest -q`
 Expected: PASS, 0 warnings.
 
 - [ ] **Step 6: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/oracle.py tests/test_oracle_run.py && git commit -m "feat: run_oracle_check — differential-test a solution against an independent reference"
+cd /Users/qatadaha/Coding/avow && git add avow/oracle.py tests/test_oracle_run.py && git commit -m "feat: run_oracle_check — differential-test a solution against an independent reference"
 ```
 
 ---
@@ -311,8 +311,8 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/oracle.py tests/test_oracle_r
 ### Task 3: `RunConfig` oracle settings + `oracle` weight
 
 **Files:**
-- Modify: `/Users/qatadaha/Coding/hermit/hermit/config.py`
-- Modify: `/Users/qatadaha/Coding/hermit/tests/test_config.py`
+- Modify: `/Users/qatadaha/Coding/avow/avow/config.py`
+- Modify: `/Users/qatadaha/Coding/avow/tests/test_config.py`
 
 **Interfaces:**
 - `RunConfig` gains `oracle_enabled: bool = True`, `oracle_model: str = "claude-opus-4-8"`, `oracle_floor: float = 1.0`. The `confidence_weights` default gains `"oracle": 1.0`.
@@ -332,10 +332,10 @@ Also UPDATE the existing exact-dict assertion on `confidence_weights` (if presen
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_config.py::test_defaults_are_sane -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_config.py::test_defaults_are_sane -q`
 Expected: FAIL — `AttributeError: ... 'oracle_enabled'` (or a confidence_weights mismatch).
 
-- [ ] **Step 3: Edit `hermit/config.py`**
+- [ ] **Step 3: Edit `avow/config.py`**
 
 Add the `"oracle": 1.0` entry to the `confidence_weights` default_factory dict (alongside `holdout`/`mutation`/`intent`). Add the three fields after the existing expand-phase fields (`ideas_n`):
 
@@ -347,13 +347,13 @@ Add the `"oracle": 1.0` entry to the `confidence_weights` default_factory dict (
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_config.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_config.py -q`
 Expected: PASS.
 
 - [ ] **Step 5: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/config.py tests/test_config.py && git commit -m "feat: reference-oracle settings + oracle confidence weight on RunConfig"
+cd /Users/qatadaha/Coding/avow && git add avow/config.py tests/test_config.py && git commit -m "feat: reference-oracle settings + oracle confidence weight on RunConfig"
 ```
 
 ---
@@ -361,11 +361,11 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/config.py tests/test_config.p
 ### Task 4: Loop — oracle signal + floor (post-green)
 
 **Files:**
-- Modify: `/Users/qatadaha/Coding/hermit/hermit/loop.py`
-- Modify: `/Users/qatadaha/Coding/hermit/tests/test_loop.py`
+- Modify: `/Users/qatadaha/Coding/avow/avow/loop.py`
+- Modify: `/Users/qatadaha/Coding/avow/tests/test_loop.py`
 
 **Interfaces:**
-- `solve` gains a keyword-only `oracle_client=None` (after `property_client`). Imports `run_oracle_check` from `hermit.oracle`. `SolveResult` gains `oracle_agreement: float | None = None` (after `confidence_breakdown`).
+- `solve` gains a keyword-only `oracle_client=None` (after `property_client`). Imports `run_oracle_check` from `avow.oracle`. `SolveResult` gains `oracle_agreement: float | None = None` (after `confidence_breakdown`).
 - In the green branch: after the mutation block and before the `aggregate_confidence` call, when `config.oracle_enabled and oracle_client is not None`, run `run_oracle_check(best_dir, goal, oracle_client, config.oracle_model, config.test_command, config.test_timeout_seconds)`, charge `budget.charge_tokens(config.oracle_model, ...)`, set `oracle_agreement = orc.agreement`, and log an AttemptRecord. Add `"oracle": oracle_agreement` to the confidence signals dict. Extend `floor_breached` with `or (oracle_agreement is not None and oracle_agreement < config.oracle_floor)`. Pass `oracle_agreement=oracle_agreement` to all three SolveResult returns.
 
 - [ ] **Step 1: Write the failing test**
@@ -375,7 +375,7 @@ Add to `tests/test_loop.py`:
 ```python
 def test_loop_oracle_disagreement_floor(tmp_path):
     from types import SimpleNamespace
-    from hermit.oracle import _OraclePair
+    from avow.oracle import _OraclePair
 
     class DisagreeingOracle:
         @property
@@ -409,15 +409,15 @@ def test_loop_no_oracle_client_unaffected(tmp_path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_loop.py::test_loop_oracle_disagreement_floor -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_loop.py::test_loop_oracle_disagreement_floor -q`
 Expected: FAIL — `TypeError: solve() got an unexpected keyword argument 'oracle_client'`.
 
-- [ ] **Step 3: Edit `hermit/loop.py`**
+- [ ] **Step 3: Edit `avow/loop.py`**
 
 Add the import near the top:
 
 ```python
-from hermit.oracle import run_oracle_check
+from avow.oracle import run_oracle_check
 ```
 
 Add `oracle_client=None` to `solve`'s keyword-only params (after `property_client=None`).
@@ -465,30 +465,30 @@ Add `oracle_agreement=oracle_agreement` to ALL THREE `SolveResult(...)` returns 
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_loop.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_loop.py -q`
 Expected: PASS — the two new tests + all existing loop tests (which pass no `oracle_client` → `oracle_agreement` None → filtered from confidence, no floor → identical behavior).
 
 - [ ] **Step 5: Run the whole suite**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest -q`
 Expected: PASS (all prior + the oracle tests), 0 warnings.
 
 - [ ] **Step 6: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/loop.py tests/test_loop.py && git commit -m "feat: reference-oracle as a post-green confidence signal + agreement floor"
+cd /Users/qatadaha/Coding/avow && git add avow/loop.py tests/test_loop.py && git commit -m "feat: reference-oracle as a post-green confidence signal + agreement floor"
 ```
 
 ---
 
-### Task 5: `hermit oracle` CLI
+### Task 5: `avow oracle` CLI
 
 **Files:**
-- Modify: `/Users/qatadaha/Coding/hermit/hermit/cli.py`
-- Test: `/Users/qatadaha/Coding/hermit/tests/test_cli_oracle.py`
+- Modify: `/Users/qatadaha/Coding/avow/avow/cli.py`
+- Test: `/Users/qatadaha/Coding/avow/tests/test_cli_oracle.py`
 
 **Interfaces:**
-- New subcommand: `hermit oracle <solution_dir> <goal_file> [--config hermit.yaml]`. Builds `anthropic.Anthropic()`, runs `run_oracle_check`, prints `oracle agreement: <x>` and any counterexample. The existing subcommands are unchanged.
+- New subcommand: `avow oracle <solution_dir> <goal_file> [--config avow.yaml]`. Builds `anthropic.Anthropic()`, runs `run_oracle_check`, prints `oracle agreement: <x>` and any counterexample. The existing subcommands are unchanged.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -496,8 +496,8 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/loop.py tests/test_loop.py &&
 # tests/test_cli_oracle.py
 from pathlib import Path
 from types import SimpleNamespace
-import hermit.cli as cli
-from hermit.oracle import _OraclePair
+import avow.cli as cli
+from avow.oracle import _OraclePair
 
 
 class FakeClient:
@@ -529,10 +529,10 @@ def test_oracle_cli(tmp_path, capsys, monkeypatch):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_cli_oracle.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_cli_oracle.py -q`
 Expected: FAIL — argparse `invalid choice: 'oracle'`.
 
-- [ ] **Step 3: Edit `hermit/cli.py`**
+- [ ] **Step 3: Edit `avow/cli.py`**
 
 Add the subparser inside `main` (after the `improve` subparser, before `parse_args`):
 
@@ -556,7 +556,7 @@ Add the handler at module level:
 ```python
 def _cmd_oracle(args) -> int:
     import anthropic
-    from hermit.oracle import run_oracle_check
+    from avow.oracle import run_oracle_check
 
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
     goal = Path(args.goal_file).read_text(encoding="utf-8")
@@ -570,25 +570,25 @@ def _cmd_oracle(args) -> int:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_cli_oracle.py tests/test_cli.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_cli_oracle.py tests/test_cli.py -q`
 Expected: PASS (oracle CLI + the unchanged subcommands).
 
 - [ ] **Step 5: Run the whole suite + smoke the entry point**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest -q && hermit --help`
-Expected: all tests PASS, 0 warnings; `hermit --help` lists `solve`, `improve`, `mutate`, `intent-check`, `verify`, `propertize`, `oracle`.
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest -q && avow --help`
+Expected: all tests PASS, 0 warnings; `avow --help` lists `solve`, `improve`, `mutate`, `intent-check`, `verify`, `propertize`, `oracle`.
 
 - [ ] **Step 6: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/cli.py tests/test_cli_oracle.py && git commit -m "feat: hermit oracle CLI — differential-test any solution against a generated reference"
+cd /Users/qatadaha/Coding/avow && git add avow/cli.py tests/test_cli_oracle.py && git commit -m "feat: avow oracle CLI — differential-test any solution against a generated reference"
 ```
 
 ---
 
 ## Manual validation (after Task 5, with credentials)
 
-`hermit oracle ~/Coding/hermit-demo-full/.hermit/best ~/Coding/hermit-demo-full/goal.md` → generates an independent reference slugify and fuzzes the built solution against it; prints `oracle agreement: 1.0` (or a counterexample if they diverge).
+`avow oracle ~/Coding/avow-demo-full/.avow/best ~/Coding/avow-demo-full/goal.md` → generates an independent reference slugify and fuzzes the built solution against it; prints `oracle agreement: 1.0` (or a counterexample if they diverge).
 
 ## What this deliberately does NOT do (later)
 

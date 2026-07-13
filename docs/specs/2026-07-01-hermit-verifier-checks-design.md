@@ -1,10 +1,10 @@
-# Hermit — Verifier Checks (generalize beyond pytest) — Design Spec
+# Avow — Verifier Checks (generalize beyond pytest) — Design Spec
 
-**Status:** Approved (2026-07-01). The first slice of the "widen the verifier menu" direction: let Hermit escape *code-with-unit-tests* by adding arbitrary verifier commands (lint, typecheck, security scan, metric/audit) as first-class gates alongside the pytest suite.
+**Status:** Approved (2026-07-01). The first slice of the "widen the verifier menu" direction: let Avow escape *code-with-unit-tests* by adding arbitrary verifier commands (lint, typecheck, security scan, metric/audit) as first-class gates alongside the pytest suite.
 
 ## Goal
 
-Today Hermit's only verifier is a pytest suite. Add **checks** — arbitrary verifier commands the solution must also pass — so a goal can require not just "the tests pass" but "the tests pass **and** it lints clean **and** it typechecks **and** it's under the size/perf budget." The same machinery extends to accessibility / SEO / schema / security audits: anything that runs and returns pass/fail. More verifier *types* → more product *types* Hermit can drive to perfect.
+Today Avow's only verifier is a pytest suite. Add **checks** — arbitrary verifier commands the solution must also pass — so a goal can require not just "the tests pass" but "the tests pass **and** it lints clean **and** it typechecks **and** it's under the size/perf budget." The same machinery extends to accessibility / SEO / schema / security audits: anything that runs and returns pass/fail. More verifier *types* → more product *types* Avow can drive to perfect.
 
 ## The check model
 
@@ -20,7 +20,7 @@ In the loop, right after `result = runner.run()`: if `config.checks`, run them o
 
 ## Components
 
-`hermit/checks.py`:
+`avow/checks.py`:
 
 | Unit | Job |
 |---|---|
@@ -30,7 +30,7 @@ In the loop, right after `result = runner.run()`: if `config.checks`, run them o
 
 - `RunConfig` gains `checks: list = Field(default_factory=list)` — each item a dict `{name, command}`.
 - **Loop:** after `runner.run()`, when `config.checks`: `result = combine_checks(result, run_checks(workspace.solution_dir, config.checks, config.test_timeout_seconds))`. One inserted line; nothing else changes.
-- **CLI:** `hermit check <solution_dir> [--config]` — run the configured checks on a solution and print each check's pass/fail (standalone, like `mutate`/`verify`).
+- **CLI:** `avow check <solution_dir> [--config]` — run the configured checks on a solution and print each check's pass/fail (standalone, like `mutate`/`verify`).
 
 ## Honesty & limitations
 
@@ -44,7 +44,7 @@ In the loop, right after `result = runner.run()`: if `config.checks`, run them o
 - `run_checks`: a passing check (`python -c "exit(0)"`) and a failing check (`python -c "exit(1)"`) → correct `passed`; a missing command → failed (not a crash); detail captured on failure.
 - `combine_checks`: a `TestResult` (2 passed, 0 failed, total 2) + one passing + one failing check → combined (3 passed, 1 failed, total 4), `is_green False`, `failures` includes `check::<name>`; empty checks → returns the result object unchanged.
 - Loop: `checks=[{always-fail}]` + a solution that passes the pytest suite → never green (the check gates it), the Builder's feedback carries the check failure; `checks=[{always-pass}]` → green; `checks=[]` (default) → existing behavior unchanged.
-- CLI: `hermit check` on a solution with a passing + a failing check → prints both outcomes.
+- CLI: `avow check` on a solution with a passing + a failing check → prints both outcomes.
 
 ## Out of scope (later)
 

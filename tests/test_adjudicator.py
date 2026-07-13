@@ -1,8 +1,8 @@
 # tests/test_adjudicator.py
 from pathlib import Path
 from types import SimpleNamespace
-from hermit.adjudicator import adjudicate_failures
-from hermit.oracle import _OraclePair
+from avow.adjudicator import adjudicate_failures
+from avow.oracle import _OraclePair
 
 CMD = ["python", "-m", "pytest", "-q"]
 

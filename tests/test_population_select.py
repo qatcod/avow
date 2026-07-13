@@ -1,5 +1,5 @@
-from hermit.population import select_best
-from hermit.loop import SolveResult
+from avow.population import select_best
+from avow.loop import SolveResult
 
 
 def _r(success, confidence, score=1.0):
@@ -28,7 +28,7 @@ def test_empty_is_minus_one():
 
 
 def test_ranks_on_common_signals_excluding_intent():
-    from hermit.loop import SolveResult
+    from avow.loop import SolveResult
     # cand 0's raw confidence is inflated by a high suite-level intent term; cand 1 has
     # strictly better SOLUTION signals. Excluding intent, cand 1 wins.
     c0 = SolveResult(True, 1.0, 1, "green", None, confidence=0.95,

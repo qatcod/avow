@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from hermit.backtranslation import back_translate, _InferredGoal
+from avow.backtranslation import back_translate, _InferredGoal
 
 
 class FakeMessages:

@@ -20,10 +20,10 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from hermit.runner import Runner
-from hermit.mutation import ast_mutants, run_mutation_testing
-from hermit.confidence import aggregate_confidence
-from hermit.calibration import CalibrationRow
+from avow.runner import Runner
+from avow.mutation import ast_mutants, run_mutation_testing
+from avow.confidence import aggregate_confidence
+from avow.calibration import CalibrationRow
 
 
 def _offline_confidence(sol_dir, tests_dir, source_files, config) -> float | None:

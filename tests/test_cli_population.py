@@ -1,8 +1,8 @@
 from pathlib import Path
 from types import SimpleNamespace
-import hermit.cli as cli
-from hermit.examiner import TestSuite, TestFile
-from hermit.builder import BuilderOutcome
+import avow.cli as cli
+from avow.examiner import TestSuite, TestFile
+from avow.builder import BuilderOutcome
 
 
 class DispatchClient:
@@ -16,16 +16,16 @@ class DispatchClient:
             po = TestSuite(test_plan="add", tests=[TestFile(
                 path="test_add.py", content="from lib import add\ndef test_add():\n    assert add(2, 3) == 5\n")])
         elif name == "_InferredGoal":
-            from hermit.backtranslation import _InferredGoal
+            from avow.backtranslation import _InferredGoal
             po = _InferredGoal(inferred_goal="add two integers")
         elif name == "IntentMatch":
-            from hermit.backtranslation import IntentMatch
+            from avow.backtranslation import IntentMatch
             po = IntentMatch(score=0.9, divergences=[])
         elif name == "_PropertySet":
-            from hermit.properties import _PropertySet
+            from avow.properties import _PropertySet
             po = _PropertySet(tests=[])
         else:  # _OraclePair
-            from hermit.oracle import _OraclePair
+            from avow.oracle import _OraclePair
             po = _OraclePair(reference_code="def add(a, b):\n    return a + b\n",
                              diff_test_code=("from lib import add as _sol\nfrom ref import add as _ref\n"
                                              "from hypothesis import given, strategies as st\n"
@@ -44,12 +44,12 @@ class StubBuilder:
 
 
 def _cfg(tmp_path):
-    p = tmp_path / "hermit.yaml"
+    p = tmp_path / "avow.yaml"
     p.write_text("population_size: 2\nholdout_fraction: 0.0\nmax_iterations: 5\n")
     return p
 
 
-def test_hermit_population_cli(tmp_path, capsys, monkeypatch):
+def test_avow_population_cli(tmp_path, capsys, monkeypatch):
     (tmp_path / "goal.md").write_text("Build add(a, b) returning a + b.")
     import anthropic
     monkeypatch.setattr(anthropic, "Anthropic", lambda *a, **k: DispatchClient())

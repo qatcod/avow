@@ -1,16 +1,16 @@
-# Hermit v3 — The Expand Phase — Implementation Plan
+# Avow v3 — The Expand Phase — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
 
 **Goal:** Turn the one-shot converge loop into a two-phase self-improving loop: after converging, an Ideator proposes the next feature, it's folded into the suite (via the Examiner), and the loop re-converges — bounded by a round cap and a human leash.
 
-**Architecture:** A new `hermit/ideator.py` (LLM proposes ranked ideas + a pure `select_idea` leash) and `hermit/improve.py` (an orchestrator that wraps the existing `solve()` — converge → ideate → leash → grow the frozen suite → re-converge). A `hermit improve` CLI. `solve()` itself is unchanged.
+**Architecture:** A new `avow/ideator.py` (LLM proposes ranked ideas + a pure `select_idea` leash) and `avow/improve.py` (an orchestrator that wraps the existing `solve()` — converge → ideate → leash → grow the frozen suite → re-converge). A `avow improve` CLI. `solve()` itself is unchanged.
 
-**Tech Stack:** Python 3.12 · `anthropic` structured outputs · reuses `hermit.loop.solve` / `hermit.examiner` / `hermit.config`.
+**Tech Stack:** Python 3.12 · `anthropic` structured outputs · reuses `avow.loop.solve` / `avow.examiner` / `avow.config`.
 
 ## Global Constraints
 
-- Python **3.11+** (Hermit-local venv at `/Users/qatadaha/Coding/hermit/.venv`, 3.12). Activate it for every command: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && <cmd>`.
+- Python **3.11+** (Avow-local venv at `/Users/qatadaha/Coding/avow/.venv`, 3.12). Activate it for every command: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && <cmd>`.
 - Model IDs exact, no date suffixes. `ideator_model` defaults to `claude-opus-4-8`.
 - LLM call uses `client.messages.parse(..., output_format=_IdeaSet)` → `.parsed_output`, `.usage`; never set `temperature`/`top_p`/`top_k`. Injectable client; unit tests use fakes, spend no tokens.
 - Reuses verified interfaces (do NOT modify them): `solve(goal_dir, config, examiner, builder, *, now=time.monotonic, write_tests=True, confirm=None, mutation_client=None, intent_client=None, escalate=None, property_client=None) -> SolveResult`; `goal` is read by `solve` from `goal_dir / "goal.md"`; the frozen suite lives at `goal_dir / "tests_frozen"`; `examiner.write_tests(goal) -> ExaminerResult(suite=TestSuite(test_plan: str, tests: list[TestFile(path: str, content: str)]), input_tokens: int, output_tokens: int)`; `SolveResult(success, best_score, iterations, reason, best_dir, intent_score=None, confidence=None, confidence_breakdown={})`.
@@ -21,8 +21,8 @@
 ### Task 1: The Ideator (`propose_ideas`)
 
 **Files:**
-- Create: `/Users/qatadaha/Coding/hermit/hermit/ideator.py`
-- Test: `/Users/qatadaha/Coding/hermit/tests/test_ideator.py`
+- Create: `/Users/qatadaha/Coding/avow/avow/ideator.py`
+- Test: `/Users/qatadaha/Coding/avow/tests/test_ideator.py`
 
 **Interfaces:**
 - Produces: `Idea(BaseModel)` with `description: str, verifier: str, objective: bool, risk: str`; `_IdeaSet(BaseModel)` with `ideas: list[Idea]`; `propose_ideas(goal: str, current_tests: str, client, model: str, n: int) -> tuple[list[Idea], int, int]` returning up to `n` ranked ideas + `(input_tokens, output_tokens)`. `([], 0, 0)` when `n<=0` or `client is None`.
@@ -32,7 +32,7 @@
 ```python
 # tests/test_ideator.py
 from types import SimpleNamespace
-from hermit.ideator import propose_ideas, Idea, _IdeaSet
+from avow.ideator import propose_ideas, Idea, _IdeaSet
 
 
 class FakeMessages:
@@ -78,13 +78,13 @@ def test_propose_ideas_noop_without_client_or_count():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_ideator.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'hermit.ideator'`.
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_ideator.py -q`
+Expected: FAIL — `ModuleNotFoundError: No module named 'avow.ideator'`.
 
-- [ ] **Step 3: Write `hermit/ideator.py`**
+- [ ] **Step 3: Write `avow/ideator.py`**
 
 ```python
-# hermit/ideator.py
+# avow/ideator.py
 from __future__ import annotations
 
 from pydantic import BaseModel
@@ -142,13 +142,13 @@ def propose_ideas(goal: str, current_tests: str, client, model: str, n: int):
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_ideator.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_ideator.py -q`
 Expected: PASS (2 passed).
 
 - [ ] **Step 5: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/ideator.py tests/test_ideator.py && git commit -m "feat: Ideator — propose ranked next-feature ideas with verifier + risk"
+cd /Users/qatadaha/Coding/avow && git add avow/ideator.py tests/test_ideator.py && git commit -m "feat: Ideator — propose ranked next-feature ideas with verifier + risk"
 ```
 
 ---
@@ -156,8 +156,8 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/ideator.py tests/test_ideator
 ### Task 2: The leash (`select_idea`)
 
 **Files:**
-- Modify: `/Users/qatadaha/Coding/hermit/hermit/ideator.py`
-- Test: `/Users/qatadaha/Coding/hermit/tests/test_select_idea.py`
+- Modify: `/Users/qatadaha/Coding/avow/avow/ideator.py`
+- Test: `/Users/qatadaha/Coding/avow/tests/test_select_idea.py`
 
 **Interfaces:**
 - Produces: `select_idea(ideas: list[Idea], escalate) -> tuple[Idea | None, bool]`. Take the top idea; if `objective and risk == "low"` → `(top, False)` (auto). Else call `escalate(top)` (if `escalate` is not None): truthy → `(top, True)`; falsy/`None` callback → `(None, True)`. Empty list → `(None, False)`.
@@ -166,7 +166,7 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/ideator.py tests/test_ideator
 
 ```python
 # tests/test_select_idea.py
-from hermit.ideator import select_idea, Idea
+from avow.ideator import select_idea, Idea
 
 
 def _idea(objective, risk):
@@ -206,10 +206,10 @@ def test_empty_list():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_select_idea.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_select_idea.py -q`
 Expected: FAIL — `ImportError: cannot import name 'select_idea'`.
 
-- [ ] **Step 3: Append to `hermit/ideator.py`**
+- [ ] **Step 3: Append to `avow/ideator.py`**
 
 ```python
 def select_idea(ideas, escalate):
@@ -225,13 +225,13 @@ def select_idea(ideas, escalate):
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_select_idea.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_select_idea.py -q`
 Expected: PASS (6 passed).
 
 - [ ] **Step 5: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/ideator.py tests/test_select_idea.py && git commit -m "feat: select_idea leash — auto-pursue objective low-risk, escalate the rest"
+cd /Users/qatadaha/Coding/avow && git add avow/ideator.py tests/test_select_idea.py && git commit -m "feat: select_idea leash — auto-pursue objective low-risk, escalate the rest"
 ```
 
 ---
@@ -239,8 +239,8 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/ideator.py tests/test_select_
 ### Task 3: `RunConfig` expand settings
 
 **Files:**
-- Modify: `/Users/qatadaha/Coding/hermit/hermit/config.py`
-- Modify: `/Users/qatadaha/Coding/hermit/tests/test_config.py`
+- Modify: `/Users/qatadaha/Coding/avow/avow/config.py`
+- Modify: `/Users/qatadaha/Coding/avow/tests/test_config.py`
 
 **Interfaces:**
 - `RunConfig` gains `max_expand_rounds: int = 3`, `ideator_model: str = "claude-opus-4-8"`, `ideas_n: int = 3`.
@@ -257,10 +257,10 @@ Add to `tests/test_config.py::test_defaults_are_sane`:
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_config.py::test_defaults_are_sane -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_config.py::test_defaults_are_sane -q`
 Expected: FAIL — `AttributeError: ... 'max_expand_rounds'`.
 
-- [ ] **Step 3: Add the fields to `RunConfig` in `hermit/config.py`**
+- [ ] **Step 3: Add the fields to `RunConfig` in `avow/config.py`**
 
 Add after the panel fields (`panel_agreement_floor`):
 
@@ -272,13 +272,13 @@ Add after the panel fields (`panel_agreement_floor`):
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_config.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_config.py -q`
 Expected: PASS.
 
 - [ ] **Step 5: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/config.py tests/test_config.py && git commit -m "feat: expand-phase settings on RunConfig"
+cd /Users/qatadaha/Coding/avow && git add avow/config.py tests/test_config.py && git commit -m "feat: expand-phase settings on RunConfig"
 ```
 
 ---
@@ -286,8 +286,8 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/config.py tests/test_config.p
 ### Task 4: The `improve()` orchestrator
 
 **Files:**
-- Create: `/Users/qatadaha/Coding/hermit/hermit/improve.py`
-- Test: `/Users/qatadaha/Coding/hermit/tests/test_improve.py`
+- Create: `/Users/qatadaha/Coding/avow/avow/improve.py`
+- Test: `/Users/qatadaha/Coding/avow/tests/test_improve.py`
 
 **Interfaces:**
 - Produces: `ImproveResult(success: bool, expansions: int, rounds: list, final)`; `improve(goal_dir, config, examiner, builder, *, ideator_client=None, escalate=None, mutation_client=None, intent_client=None, property_client=None, now=time.monotonic) -> ImproveResult`.
@@ -299,11 +299,11 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/config.py tests/test_config.p
 # tests/test_improve.py
 from pathlib import Path
 from types import SimpleNamespace
-from hermit.config import RunConfig
-from hermit.improve import improve, ImproveResult
-from hermit.examiner import ExaminerResult, TestSuite, TestFile
-from hermit.ideator import _IdeaSet, Idea
-from hermit.builder import BuilderOutcome
+from avow.config import RunConfig
+from avow.improve import improve, ImproveResult
+from avow.examiner import ExaminerResult, TestSuite, TestFile
+from avow.ideator import _IdeaSet, Idea
+from avow.builder import BuilderOutcome
 
 
 def _goal(tmp_path: Path) -> Path:
@@ -360,21 +360,21 @@ def test_improve_without_ideator_reduces_to_solve(tmp_path: Path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_improve.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'hermit.improve'`.
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_improve.py -q`
+Expected: FAIL — `ModuleNotFoundError: No module named 'avow.improve'`.
 
-- [ ] **Step 3: Write `hermit/improve.py`**
+- [ ] **Step 3: Write `avow/improve.py`**
 
 ```python
-# hermit/improve.py
+# avow/improve.py
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from hermit.loop import solve
-from hermit.ideator import propose_ideas, select_idea
+from avow.loop import solve
+from avow.ideator import propose_ideas, select_idea
 
 
 @dataclass
@@ -437,30 +437,30 @@ def improve(goal_dir, config, examiner, builder, *, ideator_client=None, escalat
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_improve.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_improve.py -q`
 Expected: PASS (2 passed).
 
 - [ ] **Step 5: Run the whole suite**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest -q`
 Expected: PASS (all prior + v3), 0 warnings.
 
 - [ ] **Step 6: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/improve.py tests/test_improve.py && git commit -m "feat: improve() orchestrator — converge, ideate, grow the suite, re-converge"
+cd /Users/qatadaha/Coding/avow && git add avow/improve.py tests/test_improve.py && git commit -m "feat: improve() orchestrator — converge, ideate, grow the suite, re-converge"
 ```
 
 ---
 
-### Task 5: `hermit improve` CLI
+### Task 5: `avow improve` CLI
 
 **Files:**
-- Modify: `/Users/qatadaha/Coding/hermit/hermit/cli.py`
-- Test: `/Users/qatadaha/Coding/hermit/tests/test_cli_improve.py`
+- Modify: `/Users/qatadaha/Coding/avow/avow/cli.py`
+- Test: `/Users/qatadaha/Coding/avow/tests/test_cli_improve.py`
 
 **Interfaces:**
-- New subcommand: `hermit improve <goal_dir> [--config hermit.yaml] [--no-llm-verify]`. Builds the Examiner + Builder + a shared verify client (unless `--no-llm-verify`), runs `improve(...)` passing the client as `ideator_client`/`intent_client`/`property_client`, prints the verdict + per-round lines. The existing `solve`/`mutate`/`intent-check`/`verify`/`propertize` subcommands are unchanged.
+- New subcommand: `avow improve <goal_dir> [--config avow.yaml] [--no-llm-verify]`. Builds the Examiner + Builder + a shared verify client (unless `--no-llm-verify`), runs `improve(...)` passing the client as `ideator_client`/`intent_client`/`property_client`, prints the verdict + per-round lines. The existing `solve`/`mutate`/`intent-check`/`verify`/`propertize` subcommands are unchanged.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -468,10 +468,10 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/improve.py tests/test_improve
 # tests/test_cli_improve.py
 from pathlib import Path
 from types import SimpleNamespace
-import hermit.cli as cli
-from hermit.examiner import TestSuite, TestFile
-from hermit.ideator import _IdeaSet
-from hermit.builder import BuilderOutcome
+import avow.cli as cli
+from avow.examiner import TestSuite, TestFile
+from avow.ideator import _IdeaSet
+from avow.builder import BuilderOutcome
 
 
 class DispatchClient:
@@ -488,13 +488,13 @@ class DispatchClient:
         elif name == "_IdeaSet":
             po = _IdeaSet(ideas=[])           # no ideas -> 0 expansions, exercises the round-0 path
         elif name == "_InferredGoal":
-            from hermit.backtranslation import _InferredGoal
+            from avow.backtranslation import _InferredGoal
             po = _InferredGoal(inferred_goal="add two integers")
         elif name == "IntentMatch":
-            from hermit.backtranslation import IntentMatch
+            from avow.backtranslation import IntentMatch
             po = IntentMatch(score=0.9, divergences=[])
         else:  # _PropertySet
-            from hermit.properties import _PropertySet
+            from avow.properties import _PropertySet
             po = _PropertySet(tests=[])
         return SimpleNamespace(parsed_output=po, usage=SimpleNamespace(input_tokens=1, output_tokens=1))
 
@@ -508,7 +508,7 @@ class StubBuilder:
         return BuilderOutcome(plan="ok", cost_usd=0.0, raw={})
 
 
-def test_hermit_improve_cli(tmp_path: Path, capsys, monkeypatch):
+def test_avow_improve_cli(tmp_path: Path, capsys, monkeypatch):
     (tmp_path / "goal.md").write_text("Build add(a, b) returning a + b.")
     import anthropic
     monkeypatch.setattr(anthropic, "Anthropic", lambda *a, **k: DispatchClient())
@@ -523,10 +523,10 @@ def test_hermit_improve_cli(tmp_path: Path, capsys, monkeypatch):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_cli_improve.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_cli_improve.py -q`
 Expected: FAIL — argparse `invalid choice: 'improve'`.
 
-- [ ] **Step 3: Edit `hermit/cli.py`**
+- [ ] **Step 3: Edit `avow/cli.py`**
 
 Add the subparser inside `main` (after the `propertize` subparser, before `parse_args`):
 
@@ -549,7 +549,7 @@ Add the handler at module level:
 
 ```python
 def _cmd_improve(args) -> int:
-    from hermit.improve import improve
+    from avow.improve import improve
 
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
     examiner = build_examiner(config)
@@ -574,25 +574,25 @@ def _cmd_improve(args) -> int:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_cli_improve.py tests/test_cli.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_cli_improve.py tests/test_cli.py -q`
 Expected: PASS (improve CLI + the unchanged subcommands).
 
 - [ ] **Step 5: Run the whole suite + smoke the entry point**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest -q && hermit --help`
-Expected: all tests PASS, 0 warnings; `hermit --help` lists `solve`, `mutate`, `intent-check`, `verify`, `propertize`, `improve`.
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest -q && avow --help`
+Expected: all tests PASS, 0 warnings; `avow --help` lists `solve`, `mutate`, `intent-check`, `verify`, `propertize`, `improve`.
 
 - [ ] **Step 6: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/cli.py tests/test_cli_improve.py && git commit -m "feat: hermit improve CLI — the self-improvement expand loop"
+cd /Users/qatadaha/Coding/avow && git add avow/cli.py tests/test_cli_improve.py && git commit -m "feat: avow improve CLI — the self-improvement expand loop"
 ```
 
 ---
 
 ## Manual validation (after Task 5, with credentials)
 
-`hermit improve ~/Coding/hermit-demo-full` → converges on the goal, then the Ideator proposes the next feature; objective low-risk ones auto-pursue (the suite grows and re-converges), riskier ones would escalate. Prints a line per round.
+`avow improve ~/Coding/avow-demo-full` → converges on the goal, then the Ideator proposes the next feature; objective low-risk ones auto-pursue (the suite grows and re-converges), riskier ones would escalate. Prints a line per round.
 
 ## What v3 deliberately does NOT do (later)
 

@@ -1,7 +1,7 @@
 from pathlib import Path
 from types import SimpleNamespace
-import hermit.cli as cli
-from hermit.oracle import _OraclePair
+import avow.cli as cli
+from avow.oracle import _OraclePair
 
 
 class FakeClient:

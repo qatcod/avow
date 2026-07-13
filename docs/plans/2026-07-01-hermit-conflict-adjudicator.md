@@ -1,19 +1,19 @@
-# Hermit — Grounded Conflict Adjudicator — Implementation Plan
+# Avow — Grounded Conflict Adjudicator — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development. Steps use checkbox (`- [ ]`) syntax.
 
 **Goal:** When a build stalls just short of green, decide *by execution* whether each failing test is a `solution_bug` or a `test_bug` — by running the failing tests against K independent reference implementations and taking the majority.
 
-**Architecture:** A new `hermit/adjudicator.py` (reuses `generate_oracle` for references + `parse_report`), a loop hook that surfaces suspected bad tests at a non-green exit, and a `hermit adjudicate` CLI. The verdict is grounded in execution; the LLM only generates references.
+**Architecture:** A new `avow/adjudicator.py` (reuses `generate_oracle` for references + `parse_report`), a loop hook that surfaces suspected bad tests at a non-green exit, and a `avow adjudicate` CLI. The verdict is grounded in execution; the LLM only generates references.
 
-**Tech Stack:** Python 3.12 · `anthropic` (via `generate_oracle`) · `pytest-json-report` · reuses `hermit.oracle`/`hermit.scoring`/`hermit.loop`/`hermit.config`.
+**Tech Stack:** Python 3.12 · `anthropic` (via `generate_oracle`) · `pytest-json-report` · reuses `avow.oracle`/`avow.scoring`/`avow.loop`/`avow.config`.
 
 ## Global Constraints
 
-- Python **3.11+** (Hermit-local venv at `/Users/qatadaha/Coding/hermit/.venv`, 3.12). Activate it for every command: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && <cmd>`.
+- Python **3.11+** (Avow-local venv at `/Users/qatadaha/Coding/avow/.venv`, 3.12). Activate it for every command: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && <cmd>`.
 - **The verdict is execution-grounded** — the LLM (`generate_oracle`) only *generates* references; whether a reference passes/fails a test is decided by *running* it. Advisory only (never edits a test).
 - **Off by default** (`adjudicate_enabled=False`) — existing behavior unchanged when disabled / no client.
-- Reuses verified interfaces (do NOT modify): `generate_oracle(goal, client, model) -> (_OraclePair|None, int, int)` from `hermit.oracle` (`_OraclePair.reference_code` is a `lib.py`-compatible simplest-correct impl); `parse_report` from `hermit.scoring`; `solve(...)`/`SolveResult`; `Runner`.
+- Reuses verified interfaces (do NOT modify): `generate_oracle(goal, client, model) -> (_OraclePair|None, int, int)` from `avow.oracle` (`_OraclePair.reference_code` is a `lib.py`-compatible simplest-correct impl); `parse_report` from `avow.scoring`; `solve(...)`/`SolveResult`; `Runner`.
 - **No `git commit` without the user's explicit go-ahead** — each task ends with a prepared commit run when greenlit.
 
 ---
@@ -21,8 +21,8 @@
 ### Task 1: `adjudicator.py` — grounded adjudication core
 
 **Files:**
-- Create: `/Users/qatadaha/Coding/hermit/hermit/adjudicator.py`
-- Test: `/Users/qatadaha/Coding/hermit/tests/test_adjudicator.py`
+- Create: `/Users/qatadaha/Coding/avow/avow/adjudicator.py`
+- Test: `/Users/qatadaha/Coding/avow/tests/test_adjudicator.py`
 
 **Interfaces:**
 - Produces: `TestVerdict(test_id, verdict, references_failed, references_total)`; `AdjudicationResult(verdicts, references_ok, input_tokens, output_tokens)`; `_run_tests_against(impl_code, frozen_dir, failing_nodeids, test_command, timeout) -> dict[nodeid,str]`; `adjudicate_failures(goal, frozen_dir, failing_nodeids, client, model, test_command, k=3, timeout=120) -> AdjudicationResult`.
@@ -33,8 +33,8 @@
 # tests/test_adjudicator.py
 from pathlib import Path
 from types import SimpleNamespace
-from hermit.adjudicator import adjudicate_failures
-from hermit.oracle import _OraclePair
+from avow.adjudicator import adjudicate_failures
+from avow.oracle import _OraclePair
 
 CMD = ["python", "-m", "pytest", "-q"]
 
@@ -79,13 +79,13 @@ def test_noop_without_client_or_failures(tmp_path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_adjudicator.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'hermit.adjudicator'`.
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_adjudicator.py -q`
+Expected: FAIL — `ModuleNotFoundError: No module named 'avow.adjudicator'`.
 
-- [ ] **Step 3: Write `hermit/adjudicator.py`**
+- [ ] **Step 3: Write `avow/adjudicator.py`**
 
 ```python
-# hermit/adjudicator.py
+# avow/adjudicator.py
 from __future__ import annotations
 
 import json
@@ -95,7 +95,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from hermit.oracle import generate_oracle
+from avow.oracle import generate_oracle
 
 
 @dataclass
@@ -127,7 +127,7 @@ def _run_tests_against(impl_code, frozen_dir, failing_nodeids, test_command, tim
     matched by basename::testfunc so a grading-cwd prefix on the nodeid doesn't break lookup."""
     frozen_dir = Path(frozen_dir)
     files = sorted({Path(nid.split("::")[0]).name for nid in failing_nodeids})
-    with tempfile.TemporaryDirectory(prefix="hermit-adj-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="avow-adj-") as tmp:
         work = Path(tmp)
         (work / "lib.py").write_text(impl_code, encoding="utf-8")
         for fname in files:
@@ -193,18 +193,18 @@ def adjudicate_failures(goal, frozen_dir, failing_nodeids, client, model, test_c
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_adjudicator.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_adjudicator.py -q`
 Expected: PASS (3 passed). (Runs real pytest subprocesses per reference — venv must be active.)
 
 - [ ] **Step 5: Run the whole suite**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest -q`
 Expected: PASS, 0 warnings.
 
 - [ ] **Step 6: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/adjudicator.py tests/test_adjudicator.py && git commit -m "feat: grounded conflict adjudicator — run failing tests against K independent references"
+cd /Users/qatadaha/Coding/avow && git add avow/adjudicator.py tests/test_adjudicator.py && git commit -m "feat: grounded conflict adjudicator — run failing tests against K independent references"
 ```
 
 ---
@@ -212,8 +212,8 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/adjudicator.py tests/test_adj
 ### Task 2: `RunConfig` adjudicator settings
 
 **Files:**
-- Modify: `/Users/qatadaha/Coding/hermit/hermit/config.py`
-- Modify: `/Users/qatadaha/Coding/hermit/tests/test_config.py`
+- Modify: `/Users/qatadaha/Coding/avow/avow/config.py`
+- Modify: `/Users/qatadaha/Coding/avow/tests/test_config.py`
 
 **Interfaces:**
 - `RunConfig` gains `adjudicate_enabled: bool = False`, `adjudicate_model: str = "claude-opus-4-8"`, `adjudicate_threshold: float = 0.9`, `adjudicate_references_k: int = 3`.
@@ -231,10 +231,10 @@ Add to `tests/test_config.py::test_defaults_are_sane`:
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_config.py::test_defaults_are_sane -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_config.py::test_defaults_are_sane -q`
 Expected: FAIL — `AttributeError: ... 'adjudicate_enabled'`.
 
-- [ ] **Step 3: Edit `hermit/config.py`**
+- [ ] **Step 3: Edit `avow/config.py`**
 
 Add after `oracle_converge_target`:
 
@@ -247,13 +247,13 @@ Add after `oracle_converge_target`:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_config.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_config.py -q`
 Expected: PASS.
 
 - [ ] **Step 5: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/config.py tests/test_config.py && git commit -m "feat: conflict-adjudicator settings on RunConfig (off by default)"
+cd /Users/qatadaha/Coding/avow && git add avow/config.py tests/test_config.py && git commit -m "feat: conflict-adjudicator settings on RunConfig (off by default)"
 ```
 
 ---
@@ -261,13 +261,13 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/config.py tests/test_config.p
 ### Task 3: Loop hook — surface suspected bad tests at a non-green exit
 
 **Files:**
-- Modify: `/Users/qatadaha/Coding/hermit/hermit/loop.py`
-- Modify: `/Users/qatadaha/Coding/hermit/tests/test_loop.py`
+- Modify: `/Users/qatadaha/Coding/avow/avow/loop.py`
+- Modify: `/Users/qatadaha/Coding/avow/tests/test_loop.py`
 
 **Interfaces:**
-- `solve` gains keyword-only `adjudicator_client=None` (after `supervisor_client=None`). Imports `adjudicate_failures` from `hermit.adjudicator`. `SolveResult` gains `suspected_bad_tests: list = field(default_factory=list)` (after the last field).
+- `solve` gains keyword-only `adjudicator_client=None` (after `supervisor_client=None`). Imports `adjudicate_failures` from `avow.adjudicator`. `SolveResult` gains `suspected_bad_tests: list = field(default_factory=list)` (after the last field).
 
-**Edits (read `hermit/loop.py` to confirm the exact lines first):**
+**Edits (read `avow/loop.py` to confirm the exact lines first):**
 - The loop's non-green exit is the single `return SolveResult(False, best_score, budget.iterations, reason, best_dir if have_best else None, ...)` AFTER the `while True:` loop (the plateau/budget/supervisor exit). Immediately BEFORE that return, insert:
   ```python
   suspected_bad_tests = []
@@ -287,7 +287,7 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/config.py tests/test_config.p
   ```
   and pass `suspected_bad_tests=suspected_bad_tests` to that `SolveResult(...)` return.
 - (`best_failures` is the list of `FailureInfo` for the best solution — already tracked by the loop. `frozen` and `log` and `goal` are in scope.)
-- Add `from hermit.adjudicator import adjudicate_failures` near the top.
+- Add `from avow.adjudicator import adjudicate_failures` near the top.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -296,7 +296,7 @@ Add to `tests/test_loop.py`:
 ```python
 def test_loop_adjudicator_flags_examiner_bad_test(tmp_path):
     from types import SimpleNamespace
-    from hermit.oracle import _OraclePair
+    from avow.oracle import _OraclePair
 
     class BadTestExaminer:
         def write_tests(self, goal):
@@ -308,7 +308,7 @@ def test_loop_adjudicator_flags_examiner_bad_test(tmp_path):
     class CorrectBuilder:
         def attempt(self, solution_dir, goal, failures):
             from pathlib import Path as _P
-            from hermit.builder import BuilderOutcome
+            from avow.builder import BuilderOutcome
             (_P(solution_dir) / "lib.py").write_text("def add(a, b):\n    return a + b\n")
             return BuilderOutcome(plan="ok", cost_usd=0.0, raw={})
 
@@ -340,37 +340,37 @@ def test_loop_adjudicator_off_by_default(tmp_path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_loop.py::test_loop_adjudicator_flags_examiner_bad_test -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_loop.py::test_loop_adjudicator_flags_examiner_bad_test -q`
 Expected: FAIL — `TypeError: solve() got an unexpected keyword argument 'adjudicator_client'`.
 
-- [ ] **Step 3: Apply the edits above to `hermit/loop.py`**
+- [ ] **Step 3: Apply the edits above to `avow/loop.py`**
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_loop.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_loop.py -q`
 Expected: PASS — the two new tests + all existing loop tests (which pass no `adjudicator_client` + leave it disabled → the hook never fires → identical behavior).
 
 - [ ] **Step 5: Run the whole suite**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest -q`
 Expected: PASS, 0 warnings.
 
 - [ ] **Step 6: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/loop.py tests/test_loop.py && git commit -m "feat: loop surfaces suspected Examiner-bad tests via the adjudicator on a close non-green exit"
+cd /Users/qatadaha/Coding/avow && git add avow/loop.py tests/test_loop.py && git commit -m "feat: loop surfaces suspected Examiner-bad tests via the adjudicator on a close non-green exit"
 ```
 
 ---
 
-### Task 4: `hermit adjudicate` CLI
+### Task 4: `avow adjudicate` CLI
 
 **Files:**
-- Modify: `/Users/qatadaha/Coding/hermit/hermit/cli.py`
-- Test: `/Users/qatadaha/Coding/hermit/tests/test_cli_adjudicate.py`
+- Modify: `/Users/qatadaha/Coding/avow/avow/cli.py`
+- Test: `/Users/qatadaha/Coding/avow/tests/test_cli_adjudicate.py`
 
 **Interfaces:**
-- New subcommand: `hermit adjudicate <solution_dir> <tests_dir> <goal_file> [--config]`. Grades the solution against the tests (via `Runner`) to find failures, runs `adjudicate_failures`, and prints a per-failing-test verdict. The existing subcommands are unchanged.
+- New subcommand: `avow adjudicate <solution_dir> <tests_dir> <goal_file> [--config]`. Grades the solution against the tests (via `Runner`) to find failures, runs `adjudicate_failures`, and prints a per-failing-test verdict. The existing subcommands are unchanged.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -378,8 +378,8 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/loop.py tests/test_loop.py &&
 # tests/test_cli_adjudicate.py
 from pathlib import Path
 from types import SimpleNamespace
-import hermit.cli as cli
-from hermit.oracle import _OraclePair
+import avow.cli as cli
+from avow.oracle import _OraclePair
 
 
 class FakeClient:
@@ -411,10 +411,10 @@ def test_adjudicate_cli(tmp_path, capsys, monkeypatch):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_cli_adjudicate.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_cli_adjudicate.py -q`
 Expected: FAIL — argparse `invalid choice: 'adjudicate'`.
 
-- [ ] **Step 3: Edit `hermit/cli.py`**
+- [ ] **Step 3: Edit `avow/cli.py`**
 
 Add the subparser inside `main` (after the `supervise` subparser, before `parse_args`):
 
@@ -439,8 +439,8 @@ Add the handler at module level:
 ```python
 def _cmd_adjudicate(args) -> int:
     import anthropic
-    from hermit.adjudicator import adjudicate_failures
-    from hermit.runner import Runner
+    from avow.adjudicator import adjudicate_failures
+    from avow.runner import Runner
 
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
     goal = Path(args.goal_file).read_text(encoding="utf-8")
@@ -462,25 +462,25 @@ def _cmd_adjudicate(args) -> int:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_cli_adjudicate.py tests/test_cli.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_cli_adjudicate.py tests/test_cli.py -q`
 Expected: PASS (adjudicate CLI + the unchanged subcommands).
 
 - [ ] **Step 5: Run the whole suite + smoke the entry point**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest -q && hermit --help`
-Expected: all tests PASS, 0 warnings; `hermit --help` lists `adjudicate` among the verbs.
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest -q && avow --help`
+Expected: all tests PASS, 0 warnings; `avow --help` lists `adjudicate` among the verbs.
 
 - [ ] **Step 6: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/cli.py tests/test_cli_adjudicate.py && git commit -m "feat: hermit adjudicate CLI — grounded test-vs-solution conflict report"
+cd /Users/qatadaha/Coding/avow && git add avow/cli.py tests/test_cli_adjudicate.py && git commit -m "feat: avow adjudicate CLI — grounded test-vs-solution conflict report"
 ```
 
 ---
 
 ## Manual validation (after Task 4, with credentials)
 
-Point it at the Roman-numeral stall: `hermit adjudicate <best> <tests_frozen> goal.md` → it should print `test_m_count: TEST BUG — k/k independent references also fail it`, proving by execution that no correct implementation passes that test.
+Point it at the Roman-numeral stall: `avow adjudicate <best> <tests_frozen> goal.md` → it should print `test_m_count: TEST BUG — k/k independent references also fail it`, proving by execution that no correct implementation passes that test.
 
 ## What this deliberately does NOT do (later)
 

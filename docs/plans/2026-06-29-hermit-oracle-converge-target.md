@@ -1,4 +1,4 @@
-# Hermit — Reference-Oracle as a Converge Target — Implementation Plan
+# Avow — Reference-Oracle as a Converge Target — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
 
@@ -6,14 +6,14 @@
 
 **Architecture:** A loop hook in `solve()`'s `write_tests` block reuses the existing `generate_oracle` to write `ref.py` + a diff test into `tests_frozen/` (the un-gameable suite). Off by default; `solve()`'s signature is unchanged (it already takes `oracle_client`).
 
-**Tech Stack:** Python 3.12 · reuses `hermit.oracle.generate_oracle` · `hermit.examiner.TestFile` · `hypothesis` · `hermit.loop`/`hermit.config`.
+**Tech Stack:** Python 3.12 · reuses `avow.oracle.generate_oracle` · `avow.examiner.TestFile` · `hypothesis` · `avow.loop`/`avow.config`.
 
 ## Global Constraints
 
-- Python **3.11+** (Hermit-local venv at `/Users/qatadaha/Coding/hermit/.venv`, 3.12). Activate it for every command: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && <cmd>`.
+- Python **3.11+** (Avow-local venv at `/Users/qatadaha/Coding/avow/.venv`, 3.12). Activate it for every command: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && <cmd>`.
 - **Anti-cheat preserved:** `ref.py` + the diff test go into `tests_frozen/` (the Builder never sees it); the diff test is a VISIBLE converge target (never held out).
 - **Off by default** (`oracle_converge_target = False`) — existing behavior unchanged when off or no `oracle_client`.
-- Reuses verified interfaces (do NOT modify): `generate_oracle(goal, client, model) -> tuple[_OraclePair | None, int, int]` from `hermit.oracle`; `TestFile(path, content)` from `hermit.examiner`; `_write_tests`/`split_suite`; `solve(...)` already has `oracle_client`.
+- Reuses verified interfaces (do NOT modify): `generate_oracle(goal, client, model) -> tuple[_OraclePair | None, int, int]` from `avow.oracle`; `TestFile(path, content)` from `avow.examiner`; `_write_tests`/`split_suite`; `solve(...)` already has `oracle_client`.
 - **No `git commit` without the user's explicit go-ahead** — each task ends with a prepared commit run when greenlit.
 
 ---
@@ -21,8 +21,8 @@
 ### Task 1: `RunConfig.oracle_converge_target`
 
 **Files:**
-- Modify: `/Users/qatadaha/Coding/hermit/hermit/config.py`
-- Modify: `/Users/qatadaha/Coding/hermit/tests/test_config.py`
+- Modify: `/Users/qatadaha/Coding/avow/avow/config.py`
+- Modify: `/Users/qatadaha/Coding/avow/tests/test_config.py`
 
 **Interfaces:**
 - `RunConfig` gains `oracle_converge_target: bool = False`.
@@ -37,10 +37,10 @@ Add to `tests/test_config.py::test_defaults_are_sane`:
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_config.py::test_defaults_are_sane -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_config.py::test_defaults_are_sane -q`
 Expected: FAIL — `AttributeError: ... 'oracle_converge_target'`.
 
-- [ ] **Step 3: Edit `hermit/config.py`**
+- [ ] **Step 3: Edit `avow/config.py`**
 
 Add after `oracle_floor`:
 
@@ -50,13 +50,13 @@ Add after `oracle_floor`:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_config.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_config.py -q`
 Expected: PASS.
 
 - [ ] **Step 5: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/config.py tests/test_config.py && git commit -m "feat: oracle_converge_target setting on RunConfig (off by default)"
+cd /Users/qatadaha/Coding/avow && git add avow/config.py tests/test_config.py && git commit -m "feat: oracle_converge_target setting on RunConfig (off by default)"
 ```
 
 ---
@@ -64,13 +64,13 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/config.py tests/test_config.p
 ### Task 2: Loop hook — fold the reference diff test into the frozen suite
 
 **Files:**
-- Modify: `/Users/qatadaha/Coding/hermit/hermit/loop.py`
-- Modify: `/Users/qatadaha/Coding/hermit/tests/test_loop.py`
+- Modify: `/Users/qatadaha/Coding/avow/avow/loop.py`
+- Modify: `/Users/qatadaha/Coding/avow/tests/test_loop.py`
 
 **Interfaces:**
-- No signature change (`solve` already takes `oracle_client`). Imports `generate_oracle` from `hermit.oracle` and `TestFile` from `hermit.examiner`.
+- No signature change (`solve` already takes `oracle_client`). Imports `generate_oracle` from `avow.oracle` and `TestFile` from `avow.examiner`.
 
-**Edits (read `hermit/loop.py`'s `write_tests` block first):**
+**Edits (read `avow/loop.py`'s `write_tests` block first):**
 - The `write_tests` block currently: writes the Examiner suite, `split_suite` → `visible, held`, the property hook (`visible = visible + props`), then `_write_tests(frozen, visible)` / `_write_tests(holdout, held)`.
 - Insert the oracle-converge hook AFTER the property hook and BEFORE `_write_tests(frozen, visible)`:
   ```python
@@ -87,7 +87,7 @@ cd /Users/qatadaha/Coding/hermit && git add hermit/config.py tests/test_config.p
   if oracle_ref_code is not None:
       (frozen / "ref.py").write_text(oracle_ref_code, encoding="utf-8")
   ```
-- Add the imports near the top of `loop.py`: `from hermit.oracle import generate_oracle` (loop.py already imports `run_oracle_check` from `hermit.oracle` — add `generate_oracle` to that import or a new line) and `from hermit.examiner import TestFile` (confirm whether `TestFile` is already imported; add if not).
+- Add the imports near the top of `loop.py`: `from avow.oracle import generate_oracle` (loop.py already imports `run_oracle_check` from `avow.oracle` — add `generate_oracle` to that import or a new line) and `from avow.examiner import TestFile` (confirm whether `TestFile` is already imported; add if not).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -96,7 +96,7 @@ Add to `tests/test_loop.py`:
 ```python
 def test_loop_oracle_converge_target(tmp_path):
     from types import SimpleNamespace
-    from hermit.oracle import _OraclePair
+    from avow.oracle import _OraclePair
 
     class FakeOracle:
         @property
@@ -130,32 +130,32 @@ def test_loop_oracle_converge_target_off_by_default(tmp_path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_loop.py::test_loop_oracle_converge_target -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_loop.py::test_loop_oracle_converge_target -q`
 Expected: FAIL — `tests_frozen/ref.py` does not exist (hook not wired yet).
 
-- [ ] **Step 3: Apply the edits above to `hermit/loop.py`**
+- [ ] **Step 3: Apply the edits above to `avow/loop.py`**
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest tests/test_loop.py -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest tests/test_loop.py -q`
 Expected: PASS — the two new tests (the diff test imports `from ref import add` and fuzzes `a+b == a+b` → passes; the Builder converges) + all existing loop tests (which pass no `oracle_client` and leave `oracle_converge_target` False → the hook never fires → identical behavior).
 
 - [ ] **Step 5: Run the whole suite**
 
-Run: `cd /Users/qatadaha/Coding/hermit && source .venv/bin/activate && python -m pytest -q`
+Run: `cd /Users/qatadaha/Coding/avow && source .venv/bin/activate && python -m pytest -q`
 Expected: PASS, 0 warnings.
 
 - [ ] **Step 6: Prepare commit** (run only when greenlit)
 
 ```bash
-cd /Users/qatadaha/Coding/hermit && git add hermit/loop.py tests/test_loop.py && git commit -m "feat: oracle converge target — fold the reference diff test into the frozen suite"
+cd /Users/qatadaha/Coding/avow && git add avow/loop.py tests/test_loop.py && git commit -m "feat: oracle converge target — fold the reference diff test into the frozen suite"
 ```
 
 ---
 
 ## Manual validation (after Task 2, with credentials)
 
-`hermit solve <goal-dir>` with `hermit.yaml` setting `oracle_converge_target: true` → the Builder must agree with an independent reference (fuzzed during the build), not just pass the Examiner's tests. A reference that contradicts the Examiner's suite makes the build fail (surfacing the conflict) rather than silently corrupting the solution.
+`avow solve <goal-dir>` with `avow.yaml` setting `oracle_converge_target: true` → the Builder must agree with an independent reference (fuzzed during the build), not just pass the Examiner's tests. A reference that contradicts the Examiner's suite makes the build fail (surfacing the conflict) rather than silently corrupting the solution.
 
 ## What this deliberately does NOT do (later)
 

@@ -1,4 +1,4 @@
-# hermit/improve.py
+# avow/improve.py
 from __future__ import annotations
 
 import shutil
@@ -6,9 +6,9 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from hermit.loop import solve
-from hermit.ideator import propose_ideas, select_idea
-from hermit.examiner import split_suite
+from avow.loop import solve
+from avow.ideator import propose_ideas, select_idea
+from avow.examiner import split_suite
 
 
 @dataclass
@@ -55,8 +55,8 @@ def improve(goal_dir, config, examiner, builder, *, ideator_client=None, escalat
     goal = (goal_dir / "goal.md").read_text()
     frozen = goal_dir / "tests_frozen"
     holdout = goal_dir / "tests_holdout"
-    best_src = goal_dir / ".hermit" / "best"
-    lkg = goal_dir / ".hermit" / "best_good"
+    best_src = goal_dir / ".avow" / "best"
+    lkg = goal_dir / ".avow" / "best_good"
 
     result = solve(goal_dir, config, examiner, builder, now=now, write_tests=True,
                    mutation_client=mutation_client, intent_client=intent_client,

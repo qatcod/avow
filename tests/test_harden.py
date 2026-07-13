@@ -1,9 +1,9 @@
 # tests/test_harden.py
 from pathlib import Path
-from hermit.config import RunConfig
-from hermit.harden import harden, HardenResult
-from hermit.examiner import ExaminerResult, TestSuite, TestFile
-from hermit.builder import BuilderOutcome
+from avow.config import RunConfig
+from avow.harden import harden, HardenResult
+from avow.examiner import ExaminerResult, TestSuite, TestFile
+from avow.builder import BuilderOutcome
 
 
 def _goal(tmp_path: Path) -> Path:

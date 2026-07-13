@@ -1,6 +1,6 @@
-# Hermit — Parallel Candidate Execution — Design Spec
+# Avow — Parallel Candidate Execution — Design Spec
 
-**Status:** Approved (2026-06-28). A beyond-design extension to the v4 Population strategy ([Population spec](2026-06-28-hermit-population-search-design.md), which shipped candidates running *sequentially* and named parallel execution as a refinement).
+**Status:** Approved (2026-06-28). A beyond-design extension to the v4 Population strategy ([Population spec](2026-06-28-avow-population-search-design.md), which shipped candidates running *sequentially* and named parallel execution as a refinement).
 
 ## Goal
 
@@ -8,9 +8,9 @@ Run Population's candidate converge loops **concurrently** instead of sequential
 
 ## Why this is safe and correct
 
-- **Candidates are already fully isolated** — candidate 0 in `goal_dir/.hermit`, candidates 1…N−1 each in their own `goal_dir/.hermit/candidates/{i}/.hermit` with a private copied suite. No shared mutable state, so they can run concurrently without interfering.
+- **Candidates are already fully isolated** — candidate 0 in `goal_dir/.avow`, candidates 1…N−1 each in their own `goal_dir/.avow/candidates/{i}/.avow` with a private copied suite. No shared mutable state, so they can run concurrently without interfering.
 - **`solve()` is subprocess-bound** — it spends its time in `claude -p` and `pytest` subprocesses, which release the GIL, so a thread pool gives real concurrency for this workload without `solve()` changes.
-- **Determinism is preserved** — results are collected **in candidate-index order** (not completion order), and `select_best` ranks deterministically (ties → lowest index). So parallelism changes *only the speed*, never *which candidate wins* or *what lands at `goal_dir/.hermit/best`*. Existing Population tests produce identical outcomes.
+- **Determinism is preserved** — results are collected **in candidate-index order** (not completion order), and `select_best` ranks deterministically (ties → lowest index). So parallelism changes *only the speed*, never *which candidate wins* or *what lands at `goal_dir/.avow/best`*. Existing Population tests produce identical outcomes.
 
 ## Method
 
@@ -24,7 +24,7 @@ When `max_parallel_candidates == 1` (or only one pool candidate), behavior is ex
 
 ## Components
 
-- `hermit/population.py`: `_run_candidate_pool` rewritten to submit the pool candidates to a `ThreadPoolExecutor` and collect results in index order. A small helper `_solve_candidate(goal_dir, i, config, examiner, builder, clients, now) -> Candidate` runs one staged candidate (callable per worker). `select_best` / promotion / `population_solve` / `hybrid_solve` signatures unchanged.
+- `avow/population.py`: `_run_candidate_pool` rewritten to submit the pool candidates to a `ThreadPoolExecutor` and collect results in index order. A small helper `_solve_candidate(goal_dir, i, config, examiner, builder, clients, now) -> Candidate` runs one staged candidate (callable per worker). `select_best` / promotion / `population_solve` / `hybrid_solve` signatures unchanged.
 - `RunConfig` gains `max_parallel_candidates: int = 4`.
 
 ## Honest framing & limitations

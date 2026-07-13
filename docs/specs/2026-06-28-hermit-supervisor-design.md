@@ -1,6 +1,6 @@
-# Hermit — The Supervisor (event-triggered trajectory guardian) — Design Spec
+# Avow — The Supervisor (event-triggered trajectory guardian) — Design Spec
 
-**Status:** Approved (2026-06-28). The last agent of the original [4-agent design](2026-06-26-hermit-design.md) (§"Agents"): "Supervisor — judge trajectory → redirect / change strategy / escalate; never enforces; runs only when a trouble-signal fires."
+**Status:** Approved (2026-06-28). The last agent of the original [4-agent design](2026-06-26-avow-design.md) (§"Agents"): "Supervisor — judge trajectory → redirect / change strategy / escalate; never enforces; runs only when a trouble-signal fires."
 
 ## Goal
 
@@ -24,7 +24,7 @@ The original design names **agent proliferation as the project's #1 self-risk**,
 
 ## Components
 
-`hermit/supervisor.py`:
+`avow/supervisor.py`:
 
 | Unit | Job |
 |---|---|
@@ -43,7 +43,7 @@ The original design names **agent proliferation as the project's #1 self-risk**,
 - `RunConfig` gains `supervisor_enabled: bool = False`, `supervisor_model: str = "claude-opus-4-8"`, `supervisor_patience: int = 2`.
 - **Backward compatibility:** `supervisor_enabled` defaults False, so the hook never fires by default and existing loop behavior/tests are unchanged. The `attempt_history` accumulation and the unhinted `attempt_goal` are inert when the Supervisor is off.
 
-`hermit supervise <run_jsonl> <goal_file> [--config]` CLI — reads a recorded `run.jsonl`, reconstructs the trajectory, and prints the Supervisor's verdict for any past run.
+`avow supervise <run_jsonl> <goal_file> [--config]` CLI — reads a recorded `run.jsonl`, reconstructs the trajectory, and prints the Supervisor's verdict for any past run.
 
 ## Honest scope & limitations
 
@@ -56,7 +56,7 @@ The original design names **agent proliferation as the project's #1 self-risk**,
 
 - `review_trajectory`: fake client returning a `SupervisorVerdict` + usage → goal + trajectory forwarded into the prompt, verdict + tokens flow through, `None`-client no-op.
 - Loop (Supervisor **enabled** in the test config): an `AlwaysWrongBuilder` (never green) + a fake supervisor returning `escalate=True` → the run stops with reason `"supervisor_escalate"` before plateau; a fake returning `recommendation="continue"` → the run proceeds to the normal `"plateau"` stop. Dormant: default config (supervisor off, no client) → `AlwaysWrongBuilder` → normal `"plateau"`, Supervisor never fires (existing tests unchanged).
-- CLI: `hermit supervise` offline (monkeypatched client) reading a small `run.jsonl` → prints the verdict.
+- CLI: `avow supervise` offline (monkeypatched client) reading a small `run.jsonl` → prints the verdict.
 
 ## Out of scope (later)
 

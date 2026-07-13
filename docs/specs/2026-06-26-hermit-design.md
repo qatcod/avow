@@ -1,27 +1,27 @@
-# Hermit — Autonomous Build-and-Improve Loop — Design Spec
+# Avow — Autonomous Build-and-Improve Loop — Design Spec
 
 **Status:** Approved (brainstorming, 2026-06-26)
-**Working name:** Hermit (rename freely)
+**Working name:** Avow (rename freely)
 
 ## Goal
 
-You hand Hermit a goal. It autonomously writes code, has a *separate* adversarial QA agent test it against a frozen suite, reads its own failures and fixes them in a loop until the suite is green — then proposes its *own* next features/improvements, grounds each in a new verifier, and keeps going, until a hard budget or you stop it.
+You hand Avow a goal. It autonomously writes code, has a *separate* adversarial QA agent test it against a frozen suite, reads its own failures and fixes them in a loop until the suite is green — then proposes its *own* next features/improvements, grounds each in a new verifier, and keeps going, until a hard budget or you stop it.
 
 ## The core insight (why this works at all)
 
 Self-improving loops (AlphaEvolve, chip-design agents) work because of **one** thing: a fast, automatic, objective **verifier** that scores each attempt without a human and without the real world. The "thinking" is not the engine — the verifier is. Remove it and the loop has nothing to climb toward.
 
-So Hermit's job is to **synthesize a trustworthy verifier** for software goals, where no physics simulator exists.
+So Avow's job is to **synthesize a trustworthy verifier** for software goals, where no physics simulator exists.
 
 ## Scope
 
 **In (v1):** goals with an automatic verifier — "build a tool/library/script that makes these tests pass." The loop genuinely closes by itself.
 
-**Out (documented roadmap, NOT built):** real-world business outcomes (e.g. "$10K MRR Shopify store"). Those have no sandbox verifier; they require a human/market round and are a later strategy, not core scope. Hermit can autonomously *build* such a system; it cannot autonomously *verify* the business outcome.
+**Out (documented roadmap, NOT built):** real-world business outcomes (e.g. "$10K MRR Shopify store"). Those have no sandbox verifier; they require a human/market round and are a later strategy, not core scope. Avow can autonomously *build* such a system; it cannot autonomously *verify* the business outcome.
 
 ## The honest position on verification
 
-You cannot reach **certainty** without ground truth (a human or a simulator). With two AI agents alone, "all tests pass" means "two AIs agreed," not "the goal was met." Hermit does **not** pretend otherwise. Instead it drives the probability that *agreement ≈ correctness* as high as possible and **reports a calibrated confidence**, escalating to a human only at measured uncertainty. The verifier is treated as the product's hard part and its moat.
+You cannot reach **certainty** without ground truth (a human or a simulator). With two AI agents alone, "all tests pass" means "two AIs agreed," not "the goal was met." Avow does **not** pretend otherwise. Instead it drives the probability that *agreement ≈ correctness* as high as possible and **reports a calibrated confidence**, escalating to a human only at measured uncertainty. The verifier is treated as the product's hard part and its moat.
 
 ## Architecture
 
@@ -113,6 +113,6 @@ The orchestration loop is commodity (Devin/OpenHands/SWE-agent/Cursor). The moat
 
 - **Verifier weakness fails silently** (weak tests → green → confident garbage). Mitigated by layers III–V; never fully eliminated without a human/simulator.
 - **It's a verifiable-domain solver, not universal.** Usefulness ∝ how cheaply correctness is checkable for *this* goal. Pick targets inside that envelope.
-- **Cost.** Multi-agent loops burn tokens; the budget cap is the primary economic control. For many tasks a skilled dev is cheaper by hand — Hermit earns its keep on tasks that are *both* verifiable *and* tedious/large.
+- **Cost.** Multi-agent loops burn tokens; the budget cap is the primary economic control. For many tasks a skilled dev is cheaper by hand — Avow earns its keep on tasks that are *both* verifiable *and* tedious/large.
 - **Plateaus / local optima.** A relentless optimizer, not a creative one. Expect it to crush well-scoped verifiable tasks and to spin on conceptual leaps.
 - **Agent proliferation is the project's own biggest risk.** Order of resort: can a rule do it? → can an existing agent's prompt do it? → only then a new agent. The best version is the smallest one that works.
