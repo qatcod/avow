@@ -43,3 +43,23 @@ def test_real_corpus_extracts_green_but_wrong_from_surviving_mutants(tmp_path):
     rep = CalibrationReport(rows, threshold=0.7)
     fh, total = rep.false_high_confidence(use_oracle=False)
     assert isinstance(fh, int) and isinstance(total, int)
+
+
+def test_string_corpus_is_deterministic_and_diverse():
+    from avow.realcorpus import string_corpus
+    a, b = string_corpus(n=200), string_corpus(n=200)
+    assert a == b and len(a) == 200                 # deterministic
+    assert any(len(s) > 10 for s in a) and "" in a  # covers long inputs and the empty string
+
+
+def test_string_differential_catches_mutant_a_word_list_would_miss(tmp_path):
+    from avow.realcorpus import string_differential, load_module
+    # wrong ONLY on inputs longer than 10 chars — a short fixed word list would not catch it
+    src = "def norm(s):\n    if len(s) > 10:\n        return s.upper()\n    return s.lower()\n"
+    orig = tmp_path / "orig"; orig.mkdir(); (orig / "lib.py").write_text(src)
+    var = tmp_path / "var"; var.mkdir()
+    (var / "lib.py").write_text(src.replace("s.upper()", "s.title()"))  # diverges on long inputs
+
+    agrees = string_differential(lambda d: load_module(d, "lib.py"), ["norm"])
+    assert agrees(orig, orig) is True     # identical -> agree
+    assert agrees(orig, var) is False     # strong corpus includes long inputs -> divergence caught

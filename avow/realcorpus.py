@@ -16,6 +16,8 @@ library-specific. Everything else is generic.
 """
 from __future__ import annotations
 
+import importlib.util
+import random
 import shutil
 import tempfile
 from pathlib import Path
@@ -24,6 +26,66 @@ from avow.runner import Runner
 from avow.mutation import ast_mutants, run_mutation_testing
 from avow.confidence import aggregate_confidence
 from avow.calibration import CalibrationRow
+
+
+def load_module(dirpath, rel: str = "lib.py"):
+    """Load the module at ``dirpath/rel`` under a unique name — for differential fuzzing
+    the original and a variant of the same library in one process."""
+    p = Path(dirpath) / rel
+    spec = importlib.util.spec_from_file_location("rc_" + str(abs(hash(str(p)))), p)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def string_corpus(seed: int = 0, n: int = 400) -> list:
+    """A diverse, DETERMINISTIC set of strings for differential fuzzing of string->string
+    functions: hand-picked shapes (CamelCase, snake_case, unicode, digits, punctuation,
+    empty, whitespace) plus generated strings across several alphabets. Far wider coverage
+    than a fixed word list, so many more genuinely-wrong surviving mutants get caught."""
+    base = [
+        "", "a", "A", "aB", "AB", "ab_cd", "AbCd", "camelCase", "snake_case", "kebab-case",
+        "HTMLParser", "IOStream", "getHTTPResponse", "person", "people", "child", "index",
+        "1", "42", "007", "3.14", "a1b2c3", "  spaced  ", "trailing_", "_leading", "__dunder__",
+        "MüllerStraße", "café", "naïve", "北京市", "tab\tsep", "new\nline", "x86-64", "utf-8",
+        "UPPER", "MiXeD_CaSe", "v1.2.3", "a.b.c", "a/b/c", "a b c", "quiz", "octopus", "analysis",
+    ]
+    rnd = random.Random(seed)
+    alphabets = ["abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+                 "abcdefghijklmnopqrstuvwxyz0123456789_-", "aeiou", "AaBbCc _-.", "üñçÿéèà北京"]
+    while len(base) < n:
+        alpha = rnd.choice(alphabets)
+        base.append("".join(rnd.choice(alpha) for _ in range(rnd.randint(0, 24))))
+    return base
+
+
+def string_differential(load, func_names, inputs=None):
+    """Build an ``agrees(original_dir, variant_dir)`` for string->string library functions:
+    it returns False as soon as the variant's output (or raised exception type) diverges
+    from the original on any input, else True. Pass to ``build_real_corpus``. ``load`` is a
+    dir -> module loader; ``inputs`` defaults to ``string_corpus()``."""
+    inputs = inputs if inputs is not None else string_corpus()
+
+    def agrees(original_dir, variant_dir) -> bool:
+        a, b = load(original_dir), load(variant_dir)
+        for name in func_names:
+            fa, fb = getattr(a, name, None), getattr(b, name, None)
+            if fa is None or fb is None:
+                continue
+            for x in inputs:
+                try:
+                    ra = fa(x)
+                except Exception as e:
+                    ra = ("EXC", type(e).__name__)
+                try:
+                    rb = fb(x)
+                except Exception as e:
+                    rb = ("EXC", type(e).__name__)
+                if ra != rb:
+                    return False
+        return True
+
+    return agrees
 
 
 def _offline_confidence(sol_dir, tests_dir, source_files, config) -> float | None:
