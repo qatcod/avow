@@ -276,7 +276,8 @@ def _cmd_report(args) -> int:
     from avow.report import run_report
 
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
-    rep = run_report(Path(args.repo), config, max_ast_mutants=args.max_mutants)
+    rep = run_report(Path(args.repo), config, max_ast_mutants=args.max_mutants,
+                     source_override=args.source, tests_override=args.tests)
     print(f"repo: {args.repo}")
     print(f"  source modules: {len(rep.source_files)}   test files: {len(rep.test_files)}")
     if not rep.baseline_green:
@@ -413,6 +414,10 @@ def main(argv: list[str] | None = None) -> int:
     report_p.add_argument("repo")
     report_p.add_argument("--config", default=None)
     report_p.add_argument("--max-mutants", type=int, default=None, dest="max_mutants")
+    report_p.add_argument("--source", action="append", default=None,
+                          help="override the source path(s) to verify (repeatable; a file or a package dir)")
+    report_p.add_argument("--tests", action="append", default=None,
+                          help="override the test path(s) (repeatable; a file or a tests dir)")
     args = parser.parse_args(argv)
 
     if args.command == "mutate":
