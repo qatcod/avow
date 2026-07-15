@@ -45,6 +45,11 @@ class RunConfig(BaseModel):
     adjudicate_references_k: int = 3
     checks: list = Field(default_factory=list)
     strip_check_config: bool = False
+    survival_enabled: bool = False
+    gauntlet_references_k: int = 4
+    gauntlet_max_rounds: int = 3
+    gauntlet_examples: int = 200
+    gauntlet_model: str = "claude-opus-4-8"
     adversarial_rounds: int = 2
     population_size: int = 3
     max_parallel_candidates: int = 4
