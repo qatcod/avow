@@ -34,3 +34,15 @@ def test_gauntlet_cli_reports_kill(tmp_path, monkeypatch, capsys):
     rc = cli.main(["gauntlet", str(tmp_path), str(tmp_path / "goal.md")])
     out = capsys.readouterr().out
     assert rc == 2 and "KILLED" in out and "test_diff(x=0)" in out
+
+
+def test_graveyard_cli_lists_patterns(tmp_path, capsys):
+    from avow.graveyard import record, AttackPattern
+    gy = tmp_path / "gy.jsonl"
+    record(AttackPattern(category="numeric-boundary", description="probe range boundaries"), gy)
+    record(AttackPattern(category="empty-input", description="probe empty and null inputs"), gy)
+    rc = cli.main(["graveyard", "--graveyard", str(gy)])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "2 patterns" in out
+    assert "numeric-boundary" in out and "probe empty and null inputs" in out
