@@ -96,3 +96,35 @@ def build_seeded_patterns(mine_goals, held_out_name, config, mining_client_for, 
             seen.add(key)
             out.append(p)
     return out
+
+
+@dataclass
+class Cohort:
+    name: str
+    wrong: int
+    trusted: int
+
+
+@dataclass
+class CalibrationProof:
+    plain: Cohort
+    survived_empty: Cohort
+    survived_seeded: Cohort
+
+    def honesty(self, min_n: int = 8) -> str:
+        """Raw counts always; an 'N x less likely' multiplier ONLY when both compared cohorts have
+        trusted >= min_n (otherwise the sample cannot support a multiplier and we say so)."""
+        lines = [f"{c.name}: {c.wrong}/{c.trusted} wrong-when-trusted (n={c.trusted})"
+                 for c in (self.plain, self.survived_empty, self.survived_seeded)]
+        p, e = self.plain, self.survived_empty
+        if p.trusted >= min_n and e.trusted >= min_n and p.wrong > 0:
+            pr, er = p.wrong / p.trusted, e.wrong / e.trusted
+            if er > 0:
+                lines.append(f"survivors are {pr / er:.1f}x less likely to be wrong than a plain green")
+            else:
+                lines.append(f"survivors had zero wrong-when-trusted (plain: {pr:.0%})")
+        else:
+            lines.append(f"insufficient n for a multiplier (need >={min_n}, got "
+                         f"plain={p.trusted}, survived={e.trusted}) -- raw counts only")
+        lines.append(f"seeded vs empty wrong-when-trusted: {self.survived_seeded.wrong} vs {e.wrong}")
+        return "\n".join(lines)
