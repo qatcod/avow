@@ -352,7 +352,56 @@ def _cmd_report(args) -> int:
     return 0
 
 
+def _stub_coroner():
+    from types import SimpleNamespace
+    from avow.graveyard import AttackPattern
+
+    class _C:
+        @property
+        def messages(self):
+            return self
+
+        def parse(self, *, output_format, **kwargs):
+            po = AttackPattern(category="numeric-boundary",
+                               description="probe where a shorter numeric field meets a longer one",
+                               origin_goal="", example_input="x")
+            return SimpleNamespace(parsed_output=po, usage=SimpleNamespace(input_tokens=1, output_tokens=1))
+    return _C()
+
+
+def _cmd_calibrate_gauntlet(args) -> int:
+    from avow.calibration_gauntlet import run_calibration_proof, ProofClients
+    from avow.calibration_benchmark import (DEFAULT_GOALS, FAMILY_GOALS,
+                                            make_scoring_stub, make_mining_stub)
+
+    config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
+    if args.llm:
+        import anthropic
+        client = anthropic.Anthropic()
+        goals = DEFAULT_GOALS + FAMILY_GOALS
+        clients = ProofClients(scoring_for=lambda g: client, mining_for=lambda g: client,
+                               coroner=client, oracle=client)
+        label = f"n={sum(len(g.variants) for g in goals)}, LLM references, single run"
+    else:
+        goals = FAMILY_GOALS   # the stubs only cover the family; DEFAULT_GOALS need real references
+        clients = ProofClients(scoring_for=lambda g: make_scoring_stub(g.name),
+                               mining_for=lambda g: make_mining_stub(g.name),
+                               coroner=_stub_coroner(), oracle=None)
+        label = "STUB MODE -- deterministic mechanism demonstration, not real references"
+
+    proof = run_calibration_proof(goals, lambda g: "bug_lexical", config, clients,
+                                  min_n=8, use_oracle=args.llm, with_seed=args.seed)
+    print(f"calibration proof ({label}):")
+    print(proof.honesty(min_n=8))
+    print("note: 'survived' means it agreed with independent references across a fuzzed space -- "
+          "not a proof of correctness.")
+    return 0
+
+
 def _cmd_calibrate(args) -> int:
+    if getattr(args, "gauntlet", False):
+        return _cmd_calibrate_gauntlet(args)
+
     from avow.calibration import run_calibration
     from avow.calibration_benchmark import DEFAULT_GOALS
 
@@ -475,6 +524,10 @@ def main(argv: list[str] | None = None) -> int:
     cal_p.add_argument("--config", default=None)
     cal_p.add_argument("--llm", action="store_true",
                        help="also run the suite-independent reference oracle (needs ANTHROPIC_API_KEY)")
+    cal_p.add_argument("--gauntlet", action="store_true",
+                       help="run the survival-gauntlet calibration proof (plain vs survived vs seeded)")
+    cal_p.add_argument("--seed", action="store_true",
+                       help="include the seeded-graveyard cohort (leave-one-out)")
     report_p = sub.add_parser(
         "report", help="point-and-go: auto-detect a repo's code + tests and mutation-score its suite (no goal/layout setup)")
     report_p.add_argument("repo")
