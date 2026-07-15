@@ -172,6 +172,45 @@ def _cmd_harden(args) -> int:
     return 0 if result.success else 2
 
 
+def _cmd_survive(args) -> int:
+    from avow.survive import survive
+
+    config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
+    examiner = build_examiner(config)
+    builder = Builder(model=config.builder_model, timeout=config.builder_timeout_seconds)
+    verify_client = None
+    if not args.no_llm_verify:
+        import anthropic
+        verify_client = anthropic.Anthropic()
+    result = survive(Path(args.goal_dir), config, examiner, builder,
+                     gauntlet_client=verify_client, intent_client=verify_client,
+                     property_client=verify_client, oracle_client=verify_client)
+    print(f"result: status={result.status} gauntlet_rounds={result.rounds}")
+    if result.status == "died" and result.death_counterexample is not None:
+        print(f"  killed by counterexample: {result.death_counterexample.input_repr}")
+    print("note: 'verified_survivor' means it survived a K-reference execution gauntlet, "
+          "not a proof of correctness.")
+    return 0 if result.status in ("verified_survivor", "unverified") else 2
+
+
+def _cmd_gauntlet(args) -> int:
+    import anthropic
+    from avow.gauntlet import run_gauntlet
+
+    config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
+    goal = Path(args.goal_file).read_text(encoding="utf-8")
+    g = run_gauntlet(Path(args.solution_dir), goal, anthropic.Anthropic(), config.gauntlet_model,
+                     config.test_command, k=config.gauntlet_references_k,
+                     examples=config.gauntlet_examples, timeout=config.test_timeout_seconds)
+    if g.survived:
+        print(f"VERIFIED SURVIVOR — agreed with {g.references_ok}/{g.references_total} independent "
+              f"references across the fuzzed space (survived the gauntlet; not a proof of correctness)")
+        return 0
+    print("KILLED — a majority of independent references diverge from this solution.")
+    print(f"  counterexample: {g.counterexample.input_repr}")
+    return 2
+
+
 def _cmd_population(args) -> int:
     from avow.population import population_solve, hybrid_solve
 
@@ -382,6 +421,16 @@ def main(argv: list[str] | None = None) -> int:
     harden_p.add_argument("goal_dir")
     harden_p.add_argument("--config", default=None)
     harden_p.add_argument("--no-llm-verify", action="store_true")
+    survive_p = sub.add_parser(
+        "survive", help="converge, then survive a harder execution gauntlet — one counterexample kills the green and it fights back")
+    survive_p.add_argument("goal_dir")
+    survive_p.add_argument("--config", default=None)
+    survive_p.add_argument("--no-llm-verify", action="store_true")
+    gauntlet_p = sub.add_parser(
+        "gauntlet", help="attack an existing solution once: K independent references vs the solution over a fuzzed input space")
+    gauntlet_p.add_argument("solution_dir")
+    gauntlet_p.add_argument("goal_file")
+    gauntlet_p.add_argument("--config", default=None)
     pop_p = sub.add_parser("population",
                            help="run N candidate solutions and let the verifier pick the winner")
     pop_p.add_argument("goal_dir")
@@ -440,6 +489,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "harden":
         return _cmd_harden(args)
+
+    if args.command == "survive":
+        return _cmd_survive(args)
+
+    if args.command == "gauntlet":
+        return _cmd_gauntlet(args)
 
     if args.command == "population":
         return _cmd_population(args)
