@@ -54,12 +54,12 @@ The diff tests run with a Hypothesis example count of `examples` (via an injecte
 
 1. `result = solve(goal_dir, config, examiner, builder, ...)` — green + confidence, as today.
 2. If not green → `SurviveResult("not_green", 0, result, None)` (nothing to attack).
-3. `round = 0`; while `round < config.gauntlet_max_rounds` and budget remains:
+3. `round = 0`; loop while `round < config.gauntlet_max_rounds` (the primary bound; a shared `Budget` on `max_cost_usd`/`max_wall_seconds` can also terminate early, yielding `died`):
    - `g = run_gauntlet(best_dir, goal, gauntlet_client, config.gauntlet_model, config.test_command, k=config.gauntlet_references_k, examples=config.gauntlet_examples, timeout=config.test_timeout_seconds)`
-   - charge `g` tokens to the budget.
+   - charge `g`'s tokens to the run's `Budget` (for cost reporting + the early-stop guard).
    - if `g.survived` → `SurviveResult("verified_survivor", round, result, None)`.
    - else (hit): write `g.counterexample.regression_test` into `tests_frozen/` as `test_gauntlet_r{round}.py` (collision-free); re-run `solve(..., write_tests=False)` so the Builder must satisfy the counterexample too; `round += 1`.
-4. Loop exits without surviving → `SurviveResult("died", round, result, last_counterexample)` — honest: low confidence + the counterexample.
+4. Loop exits (hit `gauntlet_max_rounds` or budget) without surviving → `SurviveResult("died", round, result, last_counterexample)` — honest: low confidence + the counterexample that killed it.
 
 ## Anti-cheat & honesty (load-bearing)
 
