@@ -20,6 +20,7 @@ from pathlib import Path
 from avow.runner import Runner
 from avow.gauntlet import run_gauntlet
 from avow.coroner import abstract_counterexample
+from avow.calibration import _evaluate_variant, CalibrationReport
 
 
 @dataclass
@@ -128,3 +129,47 @@ class CalibrationProof:
                          f"plain={p.trusted}, survived={e.trusted}) -- raw counts only")
         lines.append(f"seeded vs empty wrong-when-trusted: {self.survived_seeded.wrong} vs {e.wrong}")
         return "\n".join(lines)
+
+
+@dataclass
+class ProofClients:
+    scoring_for: object    # goal -> reference client used when scoring a variant's gauntlet
+    mining_for: object     # goal -> reference client used when mining a seed pattern
+    coroner: object        # client for abstract_counterexample (or None)
+    oracle: object         # client for the oracle floor (or None)
+
+
+def run_calibration_proof(goals, seed_bug_for, config, clients, *, min_n=8, use_oracle=False,
+                          with_seed=True) -> CalibrationProof:
+    """Score every variant of every goal into three cohorts: plain-green-trusted, survived-trusted with
+    an EMPTY graveyard, and survived-trusted with a graveyard SEEDED leave-one-out from the OTHER goals'
+    deaths. A variant enters a survived cohort only if it is both trusted AND the gauntlet let it live."""
+    trusted_of = CalibrationReport([], config.confidence_threshold)._trusted
+    plain = Cohort("plain-green", 0, 0)
+    survived_empty = Cohort("survived (empty graveyard)", 0, 0)
+    survived_seeded = Cohort("survived (seeded graveyard)", 0, 0)
+
+    for g in goals:
+        for vname, src in g.variants.items():
+            row = _evaluate_variant(g, src, config, clients.oracle)
+            row.variant = vname
+            if not trusted_of(row, use_oracle):
+                continue
+            plain.trusted += 1
+            plain.wrong += int(not row.correct)
+
+            empty = score_with_gauntlet(g, src, config, clients.scoring_for(g), patterns=[])
+            if empty.survived:
+                survived_empty.trusted += 1
+                survived_empty.wrong += int(not row.correct)
+
+            if with_seed:
+                mine_goals = [(og, seed_bug_for(og)) for og in goals if og.name != g.name]
+                pats = build_seeded_patterns(mine_goals, g.name, config, clients.mining_for, clients.coroner)
+                seeded = score_with_gauntlet(g, src, config, clients.scoring_for(g),
+                                             patterns=[p.description for p in pats])
+                if seeded.survived:
+                    survived_seeded.trusted += 1
+                    survived_seeded.wrong += int(not row.correct)
+
+    return CalibrationProof(plain, survived_empty, survived_seeded)

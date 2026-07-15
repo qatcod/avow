@@ -28,3 +28,37 @@ def test_honesty_suppresses_multiplier_below_min_n():
 def test_honesty_reports_seeded_vs_empty_catch():
     out = _proof((2, 10), (2, 10), (0, 8)).honesty(min_n=8)
     assert "seeded vs empty" in out and "0 vs 2" in out
+
+
+from avow.calibration_gauntlet import run_calibration_proof, ProofClients
+from avow.calibration_benchmark import FAMILY_GOALS, make_scoring_stub, make_mining_stub
+from avow.config import RunConfig
+from types import SimpleNamespace
+from avow.graveyard import AttackPattern
+
+
+def _coroner_stub():
+    class _C:
+        @property
+        def messages(self):
+            return self
+
+        def parse(self, *, output_format, **kwargs):
+            po = AttackPattern(category="numeric-boundary",
+                               description="probe where a shorter numeric field meets a longer one",
+                               origin_goal="", example_input="x")
+            return SimpleNamespace(parsed_output=po, usage=SimpleNamespace(input_tokens=1, output_tokens=1))
+    return _C()
+
+
+def test_run_proof_seeded_catches_more_false_greens_than_empty():
+    goals = [g for g in FAMILY_GOALS if g.name in ("compare_semver", "max_version")]
+    cfg = RunConfig(gauntlet_references_k=3, gauntlet_examples=25)
+    clients = ProofClients(scoring_for=lambda g: make_scoring_stub(g.name),
+                           mining_for=lambda g: make_mining_stub(g.name),
+                           coroner=_coroner_stub(), oracle=None)
+    proof = run_calibration_proof(goals, lambda g: "bug_lexical", cfg, clients, min_n=1, with_seed=True)
+    # each goal contributes one false-green (bug_lexical) that is trusted-but-wrong under the suite
+    assert proof.plain.wrong >= 2
+    # the empty (weak) gauntlet misses them; the seeded (strong) gauntlet kills them
+    assert proof.survived_seeded.wrong < proof.survived_empty.wrong
