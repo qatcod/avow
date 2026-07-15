@@ -89,17 +89,24 @@ class GauntletResult:
 
 
 def run_gauntlet(solution_dir, goal, client, model, test_command, *,
-                 k: int = 4, examples: int = 200, timeout: int = 120) -> GauntletResult:
-    """Generate K independent references and differential-fuzz each against the solution. If a
-    MAJORITY of usable references diverge, the solution is the outlier -> KILL (with a counterexample
-    from a diverging reference). Otherwise it survives. A kill is decided purely by execution."""
+                 k: int = 4, examples: int = 200, timeout: int = 120, patterns=None) -> GauntletResult:
+    """Generate K references and differential-fuzz each against the solution. If a MAJORITY of usable
+    references diverge, the solution is the outlier -> KILL (with a counterexample from a diverging
+    reference). Otherwise it survives. A kill is decided purely by execution. When `patterns` (graveyard
+    attack-pattern descriptions) is given, reference generation is seeded to probe those known-tricky
+    input classes; an empty/None `patterns` leaves reference generation unchanged."""
     if client is None:
         return GauntletResult(True, None, 0, k, 0, 0)   # cannot attack -> survives, nothing gained
+    goal_for_refs = goal
+    if patterns:
+        goal_for_refs = goal + (
+            "\n\nA rigorous differential test MUST cover these known-tricky input classes "
+            "(ways past solutions have been fooled):\n" + "\n".join(f"- {p}" for p in patterns))
     in_tok = out_tok = 0
     agree = 0
     diverging = []   # list of (reference_code, diff_test_code, falsifying)
     for _ in range(max(1, k)):
-        pair, i_tok, o_tok = generate_oracle(goal, client, model)
+        pair, i_tok, o_tok = generate_oracle(goal_for_refs, client, model)
         in_tok += i_tok
         out_tok += o_tok
         if pair is None:

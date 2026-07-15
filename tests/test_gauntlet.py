@@ -93,3 +93,32 @@ def test_run_gauntlet_lone_divergence_does_not_kill(tmp_path):
     g = run_gauntlet(tmp_path, "f(x) returns x+1", _MostlyBrokenClient(), "m", TEST_CMD, k=4, examples=30, timeout=60)
     # 1 usable reference diverges, 3 unusable -> below the usable floor -> NOT a kill (no false revoke)
     assert g.survived is True and g.references_ok == 1
+
+
+class _CapturingClient:
+    def __init__(self):
+        self.last_content = None
+
+    @property
+    def messages(self):
+        return self
+
+    def parse(self, *, output_format, **kwargs):
+        self.last_content = kwargs["messages"][0]["content"]
+        po = _OraclePair(reference_code="def f(x):\n    return x + 1\n", diff_test_code=_DIFF)
+        return SimpleNamespace(parsed_output=po, usage=SimpleNamespace(input_tokens=1, output_tokens=1))
+
+
+def test_run_gauntlet_seeds_references_with_patterns(tmp_path):
+    (tmp_path / "lib.py").write_text("def f(x):\n    return x + 1\n")
+    c = _CapturingClient()
+    run_gauntlet(tmp_path, "f(x) returns x+1", c, "m", TEST_CMD, k=1, examples=20, timeout=60,
+                 patterns=["probe empty and boundary inputs"])
+    assert "probe empty and boundary inputs" in c.last_content
+
+
+def test_run_gauntlet_no_patterns_is_unchanged(tmp_path):
+    (tmp_path / "lib.py").write_text("def f(x):\n    return x + 1\n")
+    c = _CapturingClient()
+    run_gauntlet(tmp_path, "GOALTEXT_MARKER", c, "m", TEST_CMD, k=1, examples=20, timeout=60)
+    assert "GOALTEXT_MARKER" in c.last_content and "known-tricky" not in c.last_content
