@@ -84,3 +84,11 @@ def test_supervisor_patience_must_be_below_plateau_when_enabled():
     RunConfig(supervisor_enabled=False, supervisor_patience=5, plateau_patience=3)
     # enabled + below plateau -> fine.
     RunConfig(supervisor_enabled=True, supervisor_patience=2, plateau_patience=3)
+
+
+def test_graveyard_patterns_k_must_be_non_negative():
+    import pytest
+
+    with pytest.raises(ValueError):
+        RunConfig(graveyard_patterns_k=-1)
+    RunConfig(graveyard_patterns_k=0)   # 0 disables seeding, allowed

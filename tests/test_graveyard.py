@@ -38,3 +38,13 @@ def test_load_skips_corrupt_lines(tmp_path):
     with gy.open("a") as f:
         f.write("not json\n{}\n")
     assert [p.description for p in load(gy)] == ["good"]   # corrupt/incomplete lines skipped
+
+
+def test_load_skips_schema_drifted_lines(tmp_path):
+    # Valid JSON but not a valid AttackPattern (e.g. wrong type / future-required field missing):
+    # a ValidationError line must be skipped, not propagated.
+    gy = tmp_path / "gy.jsonl"
+    record(_p("c", "good"), gy)
+    with gy.open("a") as f:
+        f.write('{"category": 123, "description": ["not", "a", "string"]}\n')
+    assert [p.description for p in load(gy)] == ["good"]

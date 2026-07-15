@@ -80,6 +80,11 @@ class RunConfig(BaseModel):
                 f"each failing test is voted on by; got {self.adjudicate_references_k}). "
                 "Set adjudicate_enabled=False to turn adjudication off."
             )
+        if self.graveyard_patterns_k < 0:
+            raise ValueError(
+                "graveyard_patterns_k must be >= 0 (the number of recent attack patterns that seed "
+                f"each gauntlet; got {self.graveyard_patterns_k}). Use 0 to disable seeding."
+            )
         return self
 
     @classmethod

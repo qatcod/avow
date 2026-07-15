@@ -1,9 +1,19 @@
+"""The Graveyard: a global, append-only JSONL memory of attack patterns learned from past deaths.
+
+Two deliberate simplifications for v1, documented so contributors don't "fix" them by accident:
+  - Dedup is EXACT-match on the normalized (category, description) key — near-duplicate LLM wordings
+    ("probe empty strings" vs "probe empty string") are stored as distinct patterns by design. The
+    deterministic dedup tests depend on this; fuzzy matching would break them.
+  - record() is read-check-append with no file lock, so two processes writing the SAME graveyard
+    concurrently can each append the same pattern (a harmless duplicate — load()/recent() still work,
+    seeding is just slightly noisier). Cross-process locking is out of scope for v1.
+"""
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 
 class AttackPattern(BaseModel):
@@ -32,8 +42,8 @@ def load(path) -> list:
             continue
         try:
             out.append(AttackPattern(**json.loads(line)))
-        except (json.JSONDecodeError, TypeError, ValueError):
-            continue   # skip corrupt / incomplete lines — the store is best-effort
+        except (json.JSONDecodeError, TypeError, ValueError, ValidationError):
+            continue   # skip corrupt / incomplete / schema-drifted lines — the store is best-effort
     return out
 
 

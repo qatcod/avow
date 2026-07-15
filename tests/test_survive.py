@@ -117,3 +117,48 @@ def test_survive_no_coroner_records_nothing(tmp_path, monkeypatch):
             RunConfig(max_iterations=5, holdout_fraction=0.0, gauntlet_max_rounds=1, graveyard_path=str(gy)),
             StubExaminer(), GoodBuilder(), gauntlet_client=object(), coroner_client=None, now=lambda: 0.0)
     assert load(gy) == []   # no coroner -> nothing recorded
+
+
+class _RaisingCoroner:
+    @property
+    def messages(self):
+        return self
+
+    def parse(self, *, output_format, **kwargs):
+        raise RuntimeError("coroner/API exploded")
+
+
+def test_survive_autopsy_failure_never_changes_verdict(tmp_path, monkeypatch):
+    # The autopsy (Coroner + record) is strictly best-effort: an LLM/network/disk failure must
+    # neither crash the run nor change the execution-decided verdict.
+    import avow.survive as s
+    from avow.graveyard import load
+    gy = tmp_path / "gy.jsonl"
+    monkeypatch.setattr(s, "run_gauntlet", lambda *a, **k: GauntletResult(False, _CX, 4, 4, 0, 0))
+    r = survive(_goal(tmp_path),
+                RunConfig(max_iterations=5, holdout_fraction=0.0, gauntlet_max_rounds=1, graveyard_path=str(gy)),
+                StubExaminer(), GoodBuilder(), gauntlet_client=object(), coroner_client=_RaisingCoroner(),
+                now=lambda: 0.0)
+    assert r.status == "died" and r.death_counterexample is _CX   # exception swallowed, verdict intact
+    assert load(gy) == []   # nothing recorded, but no crash
+
+
+def test_survive_reseeds_next_round_with_this_runs_kill(tmp_path, monkeypatch):
+    # A kill recorded in round 0 must seed round 1's gauntlet in the SAME run (patterns are reloaded
+    # per round), not only future runs.
+    import avow.survive as s
+    gy = tmp_path / "gy.jsonl"
+    seen = []
+
+    def fake_g(*a, **k):
+        seen.append(list(k.get("patterns") or []))
+        return GauntletResult(False, _CX, 4, 4, 0, 0) if len(seen) == 1 else GauntletResult(True, None, 4, 4, 0, 0)
+
+    monkeypatch.setattr(s, "run_gauntlet", fake_g)
+    r = survive(_goal(tmp_path),
+                RunConfig(max_iterations=5, holdout_fraction=0.0, gauntlet_max_rounds=3, graveyard_path=str(gy)),
+                StubExaminer(), GoodBuilder(), gauntlet_client=object(), coroner_client=_FakeCoroner(),
+                now=lambda: 0.0)
+    assert r.status == "verified_survivor"
+    assert seen[0] == []          # round 0: empty graveyard, no seeding
+    assert "d" in seen[1]         # round 1: seeded by round-0's recorded kill ("d")

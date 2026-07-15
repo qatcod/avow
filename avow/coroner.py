@@ -27,7 +27,7 @@ THE CORRECT REFERENCE IT DIVERGED FROM:
 """
 
 
-def abstract_counterexample(counterexample, goal, client, model) -> tuple:
+def abstract_counterexample(counterexample, goal, client, model) -> "tuple[AttackPattern | None, int, int]":
     if client is None:
         return None, 0, 0
     response = client.messages.parse(
