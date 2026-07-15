@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 from avow.survive import survive, SurviveResult
 from avow.config import RunConfig
 from avow.examiner import Examiner, ExaminerResult, TestSuite, TestFile
@@ -38,7 +39,7 @@ _CX = Counterexample(input_repr="test_diff(a=0, b=0)",
 def test_survive_verified_when_gauntlet_survives(tmp_path, monkeypatch):
     import avow.survive as s
     monkeypatch.setattr(s, "run_gauntlet", lambda *a, **k: GauntletResult(True, None, 4, 4, 0, 0))
-    r = survive(_goal(tmp_path), RunConfig(max_iterations=5, holdout_fraction=0.0),
+    r = survive(_goal(tmp_path), RunConfig(max_iterations=5, holdout_fraction=0.0, graveyard_path=str(tmp_path / 'gy.jsonl')),
                 StubExaminer(), GoodBuilder(), gauntlet_client=object(), now=lambda: 0.0)
     assert r.status == "verified_survivor" and r.rounds == 0
 
@@ -52,7 +53,7 @@ def test_survive_fights_back_then_survives(tmp_path, monkeypatch):
         return GauntletResult(False, _CX, 4, 4, 0, 0) if calls["n"] == 1 else GauntletResult(True, None, 4, 4, 0, 0)
 
     monkeypatch.setattr(s, "run_gauntlet", fake_gauntlet)
-    r = survive(_goal(tmp_path), RunConfig(max_iterations=5, holdout_fraction=0.0, gauntlet_max_rounds=3),
+    r = survive(_goal(tmp_path), RunConfig(max_iterations=5, holdout_fraction=0.0, gauntlet_max_rounds=3, graveyard_path=str(tmp_path / 'gy.jsonl')),
                 StubExaminer(), GoodBuilder(), gauntlet_client=object(), now=lambda: 0.0)
     assert r.status == "verified_survivor" and r.rounds == 1
     # the counterexample was frozen into the suite as a differential regression test + its reference
@@ -64,7 +65,7 @@ def test_survive_fights_back_then_survives(tmp_path, monkeypatch):
 def test_survive_dies_when_never_survives(tmp_path, monkeypatch):
     import avow.survive as s
     monkeypatch.setattr(s, "run_gauntlet", lambda *a, **k: GauntletResult(False, _CX, 4, 4, 0, 0))
-    r = survive(_goal(tmp_path), RunConfig(max_iterations=5, holdout_fraction=0.0, gauntlet_max_rounds=2),
+    r = survive(_goal(tmp_path), RunConfig(max_iterations=5, holdout_fraction=0.0, gauntlet_max_rounds=2, graveyard_path=str(tmp_path / 'gy.jsonl')),
                 StubExaminer(), GoodBuilder(), gauntlet_client=object(), now=lambda: 0.0)
     assert r.status == "died" and r.death_counterexample is _CX
 
@@ -72,6 +73,47 @@ def test_survive_dies_when_never_survives(tmp_path, monkeypatch):
 def test_survive_no_gauntlet_client_is_unverified(tmp_path, monkeypatch):
     import avow.survive as s
     monkeypatch.setattr(s, "run_gauntlet", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not run")))
-    r = survive(_goal(tmp_path), RunConfig(max_iterations=5, holdout_fraction=0.0),
+    r = survive(_goal(tmp_path), RunConfig(max_iterations=5, holdout_fraction=0.0, graveyard_path=str(tmp_path / 'gy.jsonl')),
                 StubExaminer(), GoodBuilder(), gauntlet_client=None, now=lambda: 0.0)
     assert r.status == "unverified" and r.rounds == 0   # green, but the gauntlet never ran
+
+
+class _FakeCoroner:
+    @property
+    def messages(self):
+        return self
+
+    def parse(self, *, output_format, **kwargs):
+        from avow.graveyard import AttackPattern
+        return SimpleNamespace(
+            parsed_output=AttackPattern(category="c", description="d", origin_goal="g", example_input="x"),
+            usage=SimpleNamespace(input_tokens=1, output_tokens=1))
+
+
+def test_survive_records_pattern_on_kill(tmp_path, monkeypatch):
+    import avow.survive as s
+    from avow.graveyard import load
+    gy = tmp_path / "gy.jsonl"
+    calls = {"n": 0}
+
+    def fake_g(*a, **k):
+        calls["n"] += 1
+        return GauntletResult(False, _CX, 4, 4, 0, 0) if calls["n"] == 1 else GauntletResult(True, None, 4, 4, 0, 0)
+
+    monkeypatch.setattr(s, "run_gauntlet", fake_g)
+    r = survive(_goal(tmp_path),
+                RunConfig(max_iterations=5, holdout_fraction=0.0, gauntlet_max_rounds=3, graveyard_path=str(gy)),
+                StubExaminer(), GoodBuilder(), gauntlet_client=object(), coroner_client=_FakeCoroner(), now=lambda: 0.0)
+    assert r.status == "verified_survivor"
+    assert len(load(gy)) == 1   # the one kill was abstracted + recorded
+
+
+def test_survive_no_coroner_records_nothing(tmp_path, monkeypatch):
+    import avow.survive as s
+    from avow.graveyard import load
+    gy = tmp_path / "gy.jsonl"
+    monkeypatch.setattr(s, "run_gauntlet", lambda *a, **k: GauntletResult(False, _CX, 4, 4, 0, 0))
+    survive(_goal(tmp_path),
+            RunConfig(max_iterations=5, holdout_fraction=0.0, gauntlet_max_rounds=1, graveyard_path=str(gy)),
+            StubExaminer(), GoodBuilder(), gauntlet_client=object(), coroner_client=None, now=lambda: 0.0)
+    assert load(gy) == []   # no coroner -> nothing recorded

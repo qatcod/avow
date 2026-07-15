@@ -6,6 +6,8 @@ from pathlib import Path
 
 from avow.loop import solve
 from avow.gauntlet import run_gauntlet, _rename_ref_import
+from avow.graveyard import recent, record, default_graveyard_path
+from avow.coroner import abstract_counterexample
 
 
 @dataclass
@@ -16,8 +18,9 @@ class SurviveResult:
     death_counterexample: object = None
 
 
-def survive(goal_dir, config, examiner, builder, *, gauntlet_client, mutation_client=None,
-            intent_client=None, property_client=None, oracle_client=None, now=time.monotonic) -> SurviveResult:
+def survive(goal_dir, config, examiner, builder, *, gauntlet_client, coroner_client=None,
+            mutation_client=None, intent_client=None, property_client=None, oracle_client=None,
+            now=time.monotonic) -> SurviveResult:
     goal_dir = Path(goal_dir)
     goal = (goal_dir / "goal.md").read_text()
     frozen = goal_dir / "tests_frozen"
@@ -31,6 +34,11 @@ def survive(goal_dir, config, examiner, builder, *, gauntlet_client, mutation_cl
     if gauntlet_client is None:
         return SurviveResult("unverified", 0, result)   # green, but no gauntlet ran
 
+    # Seed the gauntlet with attack patterns learned from past deaths (global Graveyard). An empty
+    # or unseeded graveyard leaves reference generation unchanged, so this is a no-op on first runs.
+    graveyard_path = config.graveyard_path or str(default_graveyard_path())
+    patterns = [p.description for p in recent(graveyard_path, config.graveyard_patterns_k)]
+
     # Bounded strictly by gauntlet_max_rounds fight-backs. We run one MORE gauntlet than rebuilds so
     # the final rebuilt solution is itself gauntleted (not declared died while actually converged).
     # Cost is bounded: (gauntlet_max_rounds + 1) gauntlets (K references each) + gauntlet_max_rounds
@@ -39,10 +47,16 @@ def survive(goal_dir, config, examiner, builder, *, gauntlet_client, mutation_cl
     for rnd in range(config.gauntlet_max_rounds + 1):
         g = run_gauntlet(best_src, goal, gauntlet_client, config.gauntlet_model, config.test_command,
                          k=config.gauntlet_references_k, examples=config.gauntlet_examples,
-                         timeout=config.test_timeout_seconds)
+                         timeout=config.test_timeout_seconds, patterns=patterns)
         if g.survived:
             return SurviveResult("verified_survivor", rnd, result)
         last_cx = g.counterexample
+        # Autopsy: abstract this death into a transferable attack pattern and add it to the global
+        # Graveyard. Best-effort — it never changes the verdict, only seeds future gauntlets.
+        if coroner_client is not None:
+            pat, _i, _o = abstract_counterexample(g.counterexample, goal, coroner_client, config.coroner_model)
+            if pat is not None:
+                record(pat, graveyard_path)
         if rnd == config.gauntlet_max_rounds:
             return SurviveResult("died", rnd, result, last_cx)   # exhausted the fight-back budget
         # fight back: freeze the winning reference's differential test (uniquely named), then rebuild.
