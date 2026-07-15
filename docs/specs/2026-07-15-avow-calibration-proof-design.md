@@ -68,7 +68,7 @@ def build_seeded_patterns(goals, held_out_name, coroner_client, config) -> list[
 
 For every goal except `held_out_name`, take its known false-green bug, run it through the gauntlet to obtain a `Counterexample`, and abstract it with the Coroner into an `AttackPattern`. Return the deduped list. In stub/CI mode `coroner_client` is a fixed stub returning the family's boundary pattern; in `--llm` mode it is the real client.
 
-**Leakage guard (the core honesty mechanism):** the returned patterns are asserted to contain none of the held-out goal's own falsifying `example_input` values. A dedicated unit test feeds a seed set that *does* leak and asserts the guard raises. Without this guard the seeded cohort could be trivially, dishonestly inflated.
+**Leakage guard (the core honesty mechanism):** leakage is **provenance-based** — a seed pattern is leakage iff it was mined *from* the held-out goal (`AttackPattern.origin_goal == held_out_name`). Token overlap is explicitly NOT leakage: the family deliberately shares boundary tokens (e.g. "10.0", "2.11"), and a pattern mined from `max_version` that helps on `compare_semver` is exactly the transfer being measured, not a leak. `mine_pattern` stamps `origin_goal` authoritatively (from the source goal's name, not the LLM's guess) so the guard is reliable. The leave-one-out construction (never mine from the held-out goal) is the protocol; the guard is the assertion that verifies it. A dedicated unit test feeds a seed set whose provenance *is* the held-out goal and asserts the guard raises.
 
 ### 4. The proof report — `CalibrationProof`
 
