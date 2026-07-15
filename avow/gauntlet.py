@@ -64,3 +64,44 @@ def _run_diff(solution_dir, reference_code, diff_test_code, examples, test_comma
         if result.passed > 0:
             return "agree", ""
         return "unusable", ""
+
+
+@dataclass
+class GauntletResult:
+    survived: bool
+    counterexample: Counterexample | None
+    references_ok: int
+    references_total: int
+    input_tokens: int
+    output_tokens: int
+
+
+def run_gauntlet(solution_dir, goal, client, model, test_command, *,
+                 k: int = 4, examples: int = 200, timeout: int = 120) -> GauntletResult:
+    """Generate K independent references and differential-fuzz each against the solution. If a
+    MAJORITY of usable references diverge, the solution is the outlier -> KILL (with a counterexample
+    from a diverging reference). Otherwise it survives. A kill is decided purely by execution."""
+    if client is None:
+        return GauntletResult(True, None, 0, k, 0, 0)   # cannot attack -> survives, nothing gained
+    in_tok = out_tok = 0
+    agree = 0
+    diverging = []   # list of (reference_code, diff_test_code, falsifying)
+    for _ in range(max(1, k)):
+        pair, i_tok, o_tok = generate_oracle(goal, client, model)
+        in_tok += i_tok
+        out_tok += o_tok
+        if pair is None:
+            continue
+        outcome, falsifying = _run_diff(solution_dir, pair.reference_code, pair.diff_test_code,
+                                        examples, test_command, timeout)
+        if outcome == "agree":
+            agree += 1
+        elif outcome == "diverge":
+            diverging.append((pair.reference_code, pair.diff_test_code, falsifying))
+        # "unusable" references do not vote
+    usable = agree + len(diverging)
+    if diverging and len(diverging) > agree:
+        ref_code, diff_code, falsifying = diverging[0]
+        cx = Counterexample(input_repr=falsifying, reference_code=ref_code, diff_test_code=diff_code)
+        return GauntletResult(False, cx, usable, k, in_tok, out_tok)
+    return GauntletResult(True, None, usable, k, in_tok, out_tok)
