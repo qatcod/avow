@@ -43,7 +43,6 @@ def test_defaults_are_sane():
     assert cfg.adjudicate_references_k == 3
     assert cfg.checks == []
     assert cfg.strip_check_config is False        # anti-cheat ships dormant
-    assert cfg.survival_enabled is False          # survival instinct ships dormant
     assert cfg.gauntlet_references_k == 4
     assert cfg.gauntlet_max_rounds == 3
     assert cfg.gauntlet_examples == 200

@@ -14,9 +14,9 @@ The worst failure is a confident false-green; calibration measured it at 62%. Be
 
 A kill is decided by execution:
 
-1. Generate **K independent reference implementations** of the goal (reuse `oracle.generate_oracle` with varied prompts for independence, exactly as `adjudicator` already does).
-2. Each reference ships a Hypothesis **differential test** (`assert solution(x) == reference(x)`) that fuzzes type-appropriate inputs. Run each against the solution with a raised example count (`gauntlet_examples`).
-3. **Majority vote:** if MORE than half the references diverge from the solution on some input, the solution is the outlier → **KILL**. (Majority-of-K, like the adjudicator, stops one bad reference from a false kill.)
+1. Generate **K reference implementations** of the goal (reuse `oracle.generate_oracle`, one sample per reference — same generator the `adjudicator` uses). Note: these are separate samples from one model on one prompt, so they are only weakly decorrelated; true cross-provider independence is backlogged (needs OpenRouter). The majority vote mitigates but does not eliminate correlated error — reflected in the honest `verified_survivor` label.
+2. Each reference ships a Hypothesis **differential test** (`assert solution(x) == reference(x)`) that fuzzes type-appropriate inputs. Run each against the solution with a raised example count (`gauntlet_examples`); any LLM-authored `@settings` is stripped so the raised count actually governs.
+3. **Majority-of-usable vote:** among the references that produced a usable vote (not broken/wrong-interface), KILL only if MORE than half diverge from the solution AND at least `max(2, ceil(k/2))` references were usable. A lone divergent reference (the rest unusable) never revokes a green. The frozen regression uses one diverging reference (one of the majority; not cross-vetted as the single most-correct — that is the Coroner's job in B).
 4. If the majority of references AGREE with the solution across the fuzzed space → the solution **survives** this gauntlet.
 
 The counterexample is the Hypothesis falsifying example (the minimal input) plus the reference-majority's output (expected) vs the solution's output (actual).
@@ -38,12 +38,12 @@ The diff tests run with a Hypothesis example count of `examples` (via an injecte
 
 | Unit | Job |
 |---|---|
-| `SurviveResult(status: str, rounds: int, final, death_counterexample)` | `status ∈ {verified_survivor, died, not_green, aborted}` |
+| `SurviveResult(status: str, rounds: int, final, death_counterexample)` | `status ∈ {verified_survivor, died, not_green, unverified}` (`unverified` = green but no gauntlet client was supplied) |
 | `survive(goal_dir, config, examiner, builder, *, gauntlet_client, mutation_client=None, intent_client=None, property_client=None, oracle_client=None, now=time.monotonic) -> SurviveResult` | run `solve`; if green + `gauntlet_client`, run the survival loop |
 
 ### `avow/config.py`
 
-`survival_enabled: bool = False` · `gauntlet_references_k: int = 4` · `gauntlet_max_rounds: int = 3` · `gauntlet_examples: int = 200` · `gauntlet_model: str = "claude-opus-4-8"`.
+`gauntlet_references_k: int = 4` · `gauntlet_max_rounds: int = 3` · `gauntlet_examples: int = 200` · `gauntlet_model: str = "claude-opus-4-8"`. (No `survival_enabled` flag: dormancy is that `solve` is untouched and the gauntlet only runs via the opt-in `survive`/`gauntlet` verbs — a flag gating an already-explicit verb would be dead config. Reintroduce it in B/C if the gauntlet is ever wired into `solve` post-green.)
 
 ### `avow/cli.py`
 
@@ -59,14 +59,14 @@ The diff tests run with a Hypothesis example count of `examples` (via an injecte
    - charge `g`'s tokens to the run's `Budget` (for cost reporting + the early-stop guard).
    - if `g.survived` → `SurviveResult("verified_survivor", round, result, None)`.
    - else (hit): write `g.counterexample.regression_test` into `tests_frozen/` as `test_gauntlet_r{round}.py` (collision-free); re-run `solve(..., write_tests=False)` so the Builder must satisfy the counterexample too; `round += 1`.
-4. Loop exits (hit `gauntlet_max_rounds` or budget) without surviving → `SurviveResult("died", round, result, last_counterexample)` — honest: low confidence + the counterexample that killed it.
+4. Loop exits at `gauntlet_max_rounds` without surviving → `SurviveResult("died", round, result, last_counterexample)` — honest: the counterexample that killed it. The loop runs one more gauntlet than rebuilds, so the final rebuilt solution is itself gauntleted (never labeled `died` while actually converged). `gauntlet_max_rounds` is the sole bound; total cost is `(gauntlet_max_rounds + 1)` gauntlets + `gauntlet_max_rounds` re-solves, each re-solve self-bounded by the config's own budget.
 
 ## Anti-cheat & honesty (load-bearing)
 
 - The Builder never sees the gauntlet's references or counterexamples during a build; a counterexample enters only as a frozen regression test, graded in the ephemeral copy — the same anti-cheat as the Examiner's tests.
-- A kill is an execution divergence from the reference **majority** (or a property violation / crash), never an LLM's opinion. References are independently generated and never shown the solution.
+- A kill is an execution divergence from a **majority of usable references** (never an LLM's opinion); references never see the solution. Because the references are correlated samples from one model (not cross-provider), the majority reduces but does not remove correlated error — hence the honest label.
 - **"verified survivor" is not "provably correct."** It means "survived a K-reference execution gauntlet over a large fuzzed input space." Labeled honestly in the CLI output, `SurviveResult`, and docs.
-- Ships **dormant** (`survival_enabled=False`); the `survive`/`gauntlet` verbs are opt-in. `solve` is unchanged — proven by an off-path test.
+- Ships **dormant**: `solve` is entirely unchanged (proven — `loop.py` is untouched), and the gauntlet runs only via the opt-in `survive`/`gauntlet` verbs.
 
 ## Testing strategy
 

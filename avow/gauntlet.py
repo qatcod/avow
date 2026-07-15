@@ -26,9 +26,21 @@ def _extract_falsifying_example(pytest_output: str) -> str:
     return m.group(1).strip() if m else ""
 
 
+def _rename_ref_import(code: str, n: int) -> str:
+    """Rewrite a diff test's reference import to a unique per-round module (`ref_g{n}`), so
+    freezing several gauntlet references into tests_frozen/ never collides — and never accidentally
+    binds to an `oracle_converge_target` `ref.py`. Handles `from ref import ...` and `import ref`."""
+    code = re.sub(r"\bfrom\s+ref\s+import\b", f"from ref_g{n} import", code)
+    code = re.sub(r"(?<!\w)import\s+ref\b(?!\s+as)", f"import ref_g{n} as ref", code)
+    return code
+
+
 def _run_diff(solution_dir, reference_code, diff_test_code, examples, test_command, timeout) -> tuple:
     """Run ONE reference's differential test against the solution with a raised Hypothesis
     example count. Returns (outcome, falsifying): outcome in {'agree','diverge','unusable'}."""
+    # Strip any LLM-authored @settings so the injected high-example profile actually governs the
+    # fuzz (a test-level @settings would otherwise override load_profile and silently weaken it).
+    diff_test_code = re.sub(r"@settings\([^)]*\)\s*\n?", "", diff_test_code)
     with tempfile.TemporaryDirectory(prefix="avow-gauntlet-") as tmp:
         work = Path(tmp)
         for p in Path(solution_dir).glob("*.py"):
@@ -100,7 +112,14 @@ def run_gauntlet(solution_dir, goal, client, model, test_command, *,
             diverging.append((pair.reference_code, pair.diff_test_code, falsifying))
         # "unusable" references do not vote
     usable = agree + len(diverging)
-    if diverging and len(diverging) > agree:
+    # KILL only when a genuine MAJORITY of USABLE references diverge, AND enough references actually
+    # voted. One lone divergent reference (the rest unusable) must never revoke a green: references
+    # are LLM-generated and any single one can be the buggy party.
+    min_usable = max(2, (k + 1) // 2)
+    if usable >= min_usable and len(diverging) * 2 > usable:
+        # The majority establishes the SOLUTION is the outlier. We freeze the first diverging
+        # reference's test as the regression; it is one of the diverging majority (not cross-vetted
+        # as the single most-correct — that refinement is the Coroner's job, sub-project B).
         ref_code, diff_code, falsifying = diverging[0]
         cx = Counterexample(input_repr=falsifying, reference_code=ref_code, diff_test_code=diff_code)
         return GauntletResult(False, cx, usable, k, in_tok, out_tok)

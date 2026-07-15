@@ -5,8 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from avow.loop import solve
-from avow.budget import Budget
-from avow.gauntlet import run_gauntlet
+from avow.gauntlet import run_gauntlet, _rename_ref_import
 
 
 @dataclass
@@ -32,27 +31,27 @@ def survive(goal_dir, config, examiner, builder, *, gauntlet_client, mutation_cl
     if gauntlet_client is None:
         return SurviveResult("unverified", 0, result)   # green, but no gauntlet ran
 
-    budget = Budget(max_cost_usd=config.max_cost_usd, max_iterations=config.max_iterations,
-                    max_wall_seconds=config.max_wall_seconds, started_at=now())
+    # Bounded strictly by gauntlet_max_rounds fight-backs. We run one MORE gauntlet than rebuilds so
+    # the final rebuilt solution is itself gauntleted (not declared died while actually converged).
+    # Cost is bounded: (gauntlet_max_rounds + 1) gauntlets (K references each) + gauntlet_max_rounds
+    # re-solves; each re-solve is self-bounded by the config's own max_cost / iterations / wall.
     last_cx = None
-    for rnd in range(config.gauntlet_max_rounds):
+    for rnd in range(config.gauntlet_max_rounds + 1):
         g = run_gauntlet(best_src, goal, gauntlet_client, config.gauntlet_model, config.test_command,
                          k=config.gauntlet_references_k, examples=config.gauntlet_examples,
                          timeout=config.test_timeout_seconds)
-        budget.charge_tokens(config.gauntlet_model, g.input_tokens, g.output_tokens)
         if g.survived:
             return SurviveResult("verified_survivor", rnd, result)
         last_cx = g.counterexample
-        if budget.spent_usd >= config.max_cost_usd:
-            return SurviveResult("died", rnd + 1, result, last_cx)
-        # fight back: freeze the winning reference's differential test into the suite, then rebuild.
+        if rnd == config.gauntlet_max_rounds:
+            return SurviveResult("died", rnd, result, last_cx)   # exhausted the fight-back budget
+        # fight back: freeze the winning reference's differential test (uniquely named), then rebuild.
         (frozen / f"ref_g{rnd}.py").write_text(g.counterexample.reference_code, encoding="utf-8")
         (frozen / f"test_gauntlet_r{rnd}.py").write_text(
-            g.counterexample.diff_test_code.replace("from ref import", f"from ref_g{rnd} import"),
-            encoding="utf-8")
+            _rename_ref_import(g.counterexample.diff_test_code, rnd), encoding="utf-8")
         result = solve(goal_dir, config, examiner, builder, now=now, write_tests=False,
                        mutation_client=mutation_client, intent_client=intent_client,
                        property_client=property_client, oracle_client=oracle_client)
         if not result.success:
             return SurviveResult("died", rnd + 1, result, last_cx)   # couldn't re-converge on the new test
-    return SurviveResult("died", config.gauntlet_max_rounds, result, last_cx)
+    return SurviveResult("died", config.gauntlet_max_rounds, result, last_cx)   # unreachable

@@ -68,3 +68,28 @@ def test_run_gauntlet_no_client_cannot_attack(tmp_path):
     (tmp_path / "lib.py").write_text("def f(x):\n    return x\n")
     g = run_gauntlet(tmp_path, "goal", None, "m", TEST_CMD, k=3, examples=50, timeout=60)
     assert g.survived is True and g.references_ok == 0   # no attack ran -> nothing gained
+
+
+class _MostlyBrokenClient:
+    """One correct reference (diverges from a wrong solution) + K-1 broken (unusable) references."""
+    def __init__(self):
+        self.n = 0
+
+    @property
+    def messages(self):
+        return self
+
+    def parse(self, *, output_format, **kwargs):
+        self.n += 1
+        if self.n == 1:
+            po = _OraclePair(reference_code="def f(x):\n    return x + 1\n", diff_test_code=_DIFF)
+        else:
+            po = _OraclePair(reference_code="def broken(:\n", diff_test_code=_DIFF)  # syntax error -> unusable
+        return SimpleNamespace(parsed_output=po, usage=SimpleNamespace(input_tokens=1, output_tokens=1))
+
+
+def test_run_gauntlet_lone_divergence_does_not_kill(tmp_path):
+    (tmp_path / "lib.py").write_text("def f(x):\n    return x + 2\n")   # wrong, but only 1 usable ref
+    g = run_gauntlet(tmp_path, "f(x) returns x+1", _MostlyBrokenClient(), "m", TEST_CMD, k=4, examples=30, timeout=60)
+    # 1 usable reference diverges, 3 unusable -> below the usable floor -> NOT a kill (no false revoke)
+    assert g.survived is True and g.references_ok == 1
