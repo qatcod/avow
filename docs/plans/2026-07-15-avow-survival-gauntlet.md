@@ -470,7 +470,7 @@ def survive(goal_dir, config, examiner, builder, *, gauntlet_client, mutation_cl
         if g.survived:
             return SurviveResult("verified_survivor", rnd, result)
         last_cx = g.counterexample
-        if budget.spent_usd() >= config.max_cost_usd:
+        if budget.spent_usd >= config.max_cost_usd:   # spent_usd is a @property
             return SurviveResult("died", rnd + 1, result, last_cx)
         # fight back: freeze the winning reference's differential test into the suite, then rebuild.
         (frozen / f"ref_g{rnd}.py").write_text(g.counterexample.reference_code, encoding="utf-8")
