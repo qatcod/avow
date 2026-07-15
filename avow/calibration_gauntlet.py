@@ -20,7 +20,7 @@ from pathlib import Path
 from avow.runner import Runner
 from avow.gauntlet import run_gauntlet
 from avow.coroner import abstract_counterexample
-from avow.calibration import _evaluate_variant, CalibrationReport
+from avow.calibration import _evaluate_variant, is_trusted
 
 
 @dataclass
@@ -48,7 +48,9 @@ def score_with_gauntlet(goal, src, config, ref_client, patterns) -> GauntletScor
 
 
 class LeakageError(Exception):
-    """A seed pattern was mined from the very goal it is about to be tested on."""
+    """A seed pattern was mined from the very goal it is about to be tested on. This is a
+    defense-in-depth guard against a programming error (a caller that fails to exclude the held-out
+    goal from `mine_goals`); in correct leave-one-out use it never fires."""
 
 
 def assert_no_leakage(patterns, held_out_name: str) -> None:
@@ -111,14 +113,21 @@ class CalibrationProof:
     plain: Cohort
     survived_empty: Cohort
     survived_seeded: Cohort
+    seeded_ran: bool = True   # False when the proof ran without --seed; keeps honesty() from implying
+                              # the seeded graveyard was tried and caught nothing
 
     def honesty(self, min_n: int = 8) -> str:
         """Raw counts always; an 'N x less likely' multiplier ONLY when both compared cohorts have
-        trusted >= min_n (otherwise the sample cannot support a multiplier and we say so)."""
-        lines = [f"{c.name}: {c.wrong}/{c.trusted} wrong-when-trusted (n={c.trusted})"
-                 for c in (self.plain, self.survived_empty, self.survived_seeded)]
+        trusted >= min_n AND the plain cohort actually had wrong-when-trusted cases to reduce."""
+        cohorts = [self.plain, self.survived_empty]
+        if self.seeded_ran:
+            cohorts.append(self.survived_seeded)
+        lines = [f"{c.name}: {c.wrong}/{c.trusted} wrong-when-trusted (n={c.trusted})" for c in cohorts]
         p, e = self.plain, self.survived_empty
-        if p.trusted >= min_n and e.trusted >= min_n and p.wrong > 0:
+        if p.wrong == 0:
+            lines.append("no false-high-confidence in the plain cohort — every trusted plain-green "
+                         "was correct, so there is nothing for the gauntlet to reduce")
+        elif p.trusted >= min_n and e.trusted >= min_n:
             pr, er = p.wrong / p.trusted, e.wrong / e.trusted
             if er > 0:
                 lines.append(f"survivors are {pr / er:.1f}x less likely to be wrong than a plain green")
@@ -127,7 +136,10 @@ class CalibrationProof:
         else:
             lines.append(f"insufficient n for a multiplier (need >={min_n}, got "
                          f"plain={p.trusted}, survived={e.trusted}) -- raw counts only")
-        lines.append(f"seeded vs empty wrong-when-trusted: {self.survived_seeded.wrong} vs {e.wrong}")
+        if self.seeded_ran:
+            lines.append(f"seeded vs empty wrong-when-trusted: {self.survived_seeded.wrong} vs {e.wrong}")
+        else:
+            lines.append("(seeded cohort not run; pass --seed to measure the graveyard's marginal value)")
         return "\n".join(lines)
 
 
@@ -144,16 +156,23 @@ def run_calibration_proof(goals, seed_bug_for, config, clients, *, min_n=8, use_
     """Score every variant of every goal into three cohorts: plain-green-trusted, survived-trusted with
     an EMPTY graveyard, and survived-trusted with a graveyard SEEDED leave-one-out from the OTHER goals'
     deaths. A variant enters a survived cohort only if it is both trusted AND the gauntlet let it live."""
-    trusted_of = CalibrationReport([], config.confidence_threshold)._trusted
     plain = Cohort("plain-green", 0, 0)
     survived_empty = Cohort("survived (empty graveyard)", 0, 0)
     survived_seeded = Cohort("survived (seeded graveyard)", 0, 0)
 
     for g in goals:
+        # Seeding is per-goal (leave-one-out over the OTHER goals), not per-variant: mine the seed
+        # patterns once and reuse them for every variant of this goal (avoids re-mining N times).
+        seed_descriptions = []
+        if with_seed:
+            mine_goals = [(og, seed_bug_for(og)) for og in goals if og.name != g.name]
+            pats = build_seeded_patterns(mine_goals, g.name, config, clients.mining_for, clients.coroner)
+            seed_descriptions = [p.description for p in pats]
+
         for vname, src in g.variants.items():
             row = _evaluate_variant(g, src, config, clients.oracle)
             row.variant = vname
-            if not trusted_of(row, use_oracle):
+            if not is_trusted(row, config.confidence_threshold, use_oracle):
                 continue
             plain.trusted += 1
             plain.wrong += int(not row.correct)
@@ -164,12 +183,10 @@ def run_calibration_proof(goals, seed_bug_for, config, clients, *, min_n=8, use_
                 survived_empty.wrong += int(not row.correct)
 
             if with_seed:
-                mine_goals = [(og, seed_bug_for(og)) for og in goals if og.name != g.name]
-                pats = build_seeded_patterns(mine_goals, g.name, config, clients.mining_for, clients.coroner)
                 seeded = score_with_gauntlet(g, src, config, clients.scoring_for(g),
-                                             patterns=[p.description for p in pats])
+                                             patterns=seed_descriptions)
                 if seeded.survived:
                     survived_seeded.trusted += 1
                     survived_seeded.wrong += int(not row.correct)
 
-    return CalibrationProof(plain, survived_empty, survived_seeded)
+    return CalibrationProof(plain, survived_empty, survived_seeded, seeded_ran=with_seed)

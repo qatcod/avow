@@ -30,6 +30,22 @@ def test_honesty_reports_seeded_vs_empty_catch():
     assert "seeded vs empty" in out and "0 vs 2" in out
 
 
+def test_honesty_omits_seeded_line_when_seeding_not_run():
+    p = CalibrationProof(Cohort("plain-green", 2, 10), Cohort("survived (empty graveyard)", 1, 10),
+                         Cohort("survived (seeded graveyard)", 0, 0), seeded_ran=False)
+    out = p.honesty(min_n=8)
+    assert "survived (seeded graveyard):" not in out   # not implying it ran and caught nothing
+    assert "seeded vs empty" not in out
+    assert "not run" in out and "--seed" in out
+
+
+def test_honesty_zero_plain_wrong_is_not_insufficient_n():
+    out = _proof((0, 10), (0, 10), (0, 10)).honesty(min_n=8)
+    assert "insufficient n" not in out          # n is fine; there is simply nothing wrong to reduce
+    assert "less likely" not in out
+    assert "nothing for the gauntlet to reduce" in out
+
+
 from avow.calibration_gauntlet import run_calibration_proof, ProofClients
 from avow.calibration_benchmark import FAMILY_GOALS, make_scoring_stub, make_mining_stub
 from avow.config import RunConfig

@@ -127,7 +127,6 @@ DEFAULT_GOALS = [
 # should transfer to the others. Used by sub-project C's calibration proof (seeded-vs-empty graveyard).
 from dataclasses import dataclass
 from types import SimpleNamespace
-from avow.oracle import _OraclePair
 
 
 @dataclass
@@ -232,6 +231,9 @@ _IN_DIFF_WEAK = (
 
 
 def _fam_suite(fn_import, *cases):
+    # DELIBERATELY imperfect: every case uses single-digit version fields only, where lexical and
+    # numeric comparison coincide, so the lexical bug PASSES the suite (a green-but-wrong false-green).
+    # The boundary the bug gets wrong (2.2 vs 2.11, 9.0 vs 10.0) lives only in the oracle.
     body = "".join(f"    assert {c}\n" for c in cases)
     return {"test_basic.py": f"from lib import {fn_import}\ndef test_basic():\n{body}"}
 
@@ -287,7 +289,10 @@ def _stub_ref_client(reference_src, diff_strong, diff_weak, *, always_strong=Fal
         def parse(self, *, output_format, **kwargs):
             content = kwargs["messages"][0]["content"]
             strong = always_strong or ("known-tricky" in content)
-            po = _OraclePair(reference_code=reference_src, diff_test_code=diff_strong if strong else diff_weak)
+            # generate_oracle only reads .reference_code / .diff_test_code off parsed_output, so a plain
+            # duck-typed object suffices — no need to import the oracle's private _OraclePair schema here.
+            po = SimpleNamespace(reference_code=reference_src,
+                                 diff_test_code=diff_strong if strong else diff_weak)
             return SimpleNamespace(parsed_output=po, usage=SimpleNamespace(input_tokens=1, output_tokens=1))
     return _Stub()
 

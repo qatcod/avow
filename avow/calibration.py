@@ -44,17 +44,24 @@ class CalibrationRow:
     correct: bool
 
 
+def is_trusted(r: CalibrationRow, threshold: float, use_oracle: bool = False) -> bool:
+    """A green solution is 'trusted' iff its confidence clears the threshold and (optionally) the
+    suite-independent reference oracle did not disagree. Shared by the reliability report and the
+    survival-gauntlet calibration proof so the two never drift."""
+    if not (r.green and r.confidence is not None and r.confidence >= threshold):
+        return False
+    if use_oracle and r.oracle_agreement == 0.0:
+        return False  # oracle floor: an independent-reference disagreement forces not-trusted
+    return True
+
+
 @dataclass
 class CalibrationReport:
     rows: list
     threshold: float
 
     def _trusted(self, r: CalibrationRow, use_oracle: bool) -> bool:
-        if not (r.green and r.confidence is not None and r.confidence >= self.threshold):
-            return False
-        if use_oracle and r.oracle_agreement == 0.0:
-            return False  # oracle floor: an independent-reference disagreement forces not-trusted
-        return True
+        return is_trusted(r, self.threshold, use_oracle)
 
     def false_high_confidence(self, use_oracle: bool = False) -> tuple[int, int]:
         """(# trusted-but-actually-wrong, # trusted). The first number should be ~0."""
