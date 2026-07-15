@@ -49,6 +49,9 @@ class RunConfig(BaseModel):
     gauntlet_max_rounds: int = 3
     gauntlet_examples: int = 200
     gauntlet_model: str = "claude-opus-4-8"
+    coroner_model: str = "claude-opus-4-8"
+    graveyard_patterns_k: int = 20
+    graveyard_path: str = ""
     adversarial_rounds: int = 2
     population_size: int = 3
     max_parallel_candidates: int = 4

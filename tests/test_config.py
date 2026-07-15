@@ -47,6 +47,9 @@ def test_defaults_are_sane():
     assert cfg.gauntlet_max_rounds == 3
     assert cfg.gauntlet_examples == 200
     assert cfg.gauntlet_model == "claude-opus-4-8"
+    assert cfg.coroner_model == "claude-opus-4-8"
+    assert cfg.graveyard_patterns_k == 20
+    assert cfg.graveyard_path == ""
     assert cfg.adversarial_rounds == 2
     assert cfg.population_size == 3
     assert cfg.max_parallel_candidates == 4
