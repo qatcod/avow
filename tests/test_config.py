@@ -92,3 +92,7 @@ def test_graveyard_patterns_k_must_be_non_negative():
     with pytest.raises(ValueError):
         RunConfig(graveyard_patterns_k=-1)
     RunConfig(graveyard_patterns_k=0)   # 0 disables seeding, allowed
+
+
+def test_llm_max_retries_default():
+    assert RunConfig().llm_max_retries == 6

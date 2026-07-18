@@ -17,6 +17,7 @@ class RunConfig(BaseModel):
     holdout_fraction: float = 0.25
     builder_timeout_seconds: int = 600
     test_timeout_seconds: int = 120
+    llm_max_retries: int = 6   # Anthropic SDK default is 2; long multi-call verbs use this
     max_ast_mutants: int = 50
     llm_mutants_n: int = 3
     mutation_model: str = "claude-sonnet-4-6"

@@ -172,6 +172,13 @@ def _cmd_harden(args) -> int:
     return 0 if result.success else 2
 
 
+def _anthropic(config):
+    # Long multi-call verbs raise the SDK's default retry budget so a transient network blip over a
+    # long run is absorbed rather than aborting the whole run.
+    import anthropic
+    return anthropic.Anthropic(max_retries=config.llm_max_retries)
+
+
 def _cmd_survive(args) -> int:
     from avow.survive import survive
 
@@ -180,8 +187,7 @@ def _cmd_survive(args) -> int:
     builder = Builder(model=config.builder_model, timeout=config.builder_timeout_seconds)
     verify_client = None
     if not args.no_llm_verify:
-        import anthropic
-        verify_client = anthropic.Anthropic()
+        verify_client = _anthropic(config)
     if args.graveyard:
         config.graveyard_path = args.graveyard
     result = survive(Path(args.goal_dir), config, examiner, builder,
@@ -208,12 +214,11 @@ def _cmd_graveyard(args) -> int:
 
 
 def _cmd_gauntlet(args) -> int:
-    import anthropic
     from avow.gauntlet import run_gauntlet
 
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
     goal = Path(args.goal_file).read_text(encoding="utf-8")
-    g = run_gauntlet(Path(args.solution_dir), goal, anthropic.Anthropic(), config.gauntlet_model,
+    g = run_gauntlet(Path(args.solution_dir), goal, _anthropic(config), config.gauntlet_model,
                      config.test_command, k=config.gauntlet_references_k,
                      examples=config.gauntlet_examples, timeout=config.test_timeout_seconds)
     if g.survived:
@@ -376,8 +381,7 @@ def _cmd_calibrate_gauntlet(args) -> int:
 
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
     if args.llm:
-        import anthropic
-        client = anthropic.Anthropic()
+        client = _anthropic(config)
         goals = DEFAULT_GOALS + FAMILY_GOALS
         clients = ProofClients(scoring_for=lambda g: client, mining_for=lambda g: client,
                                coroner=client, oracle=client)
