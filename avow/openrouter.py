@@ -17,12 +17,16 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
 
 _BASE_URL = "https://openrouter.ai/api/v1"
+_RETRY_ATTEMPTS = 4
+_RETRY_BACKOFF = 0.5
+_RETRYABLE_STATUS = {429}
 
 
 @dataclass
@@ -134,19 +138,35 @@ class OpenRouterClient:
             )
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         url = self.base_url + "/chat/completions"
-        if self._http is not None:
-            resp = self._http.post(url, headers=headers, json=body, timeout=self.timeout)
-        else:
-            resp = httpx.post(url, headers=headers, json=body, timeout=self.timeout)
-        if not 200 <= resp.status_code < 300:
-            raise RuntimeError(f"OpenRouter {resp.status_code}: {resp.text[:300]}")
-        try:
-            data = resp.json()
-        except (json.JSONDecodeError, ValueError) as exc:
-            raise RuntimeError("OpenRouter returned a non-JSON response") from exc
-        if not isinstance(data, dict):
-            raise RuntimeError("OpenRouter returned a non-object JSON response")
-        return data
+        last_exc = None
+        for attempt in range(_RETRY_ATTEMPTS):
+            try:
+                if self._http is not None:
+                    resp = self._http.post(url, headers=headers, json=body, timeout=self.timeout)
+                else:
+                    resp = httpx.post(url, headers=headers, json=body, timeout=self.timeout)
+            except httpx.TransportError as exc:   # covers connect errors AND timeouts
+                last_exc = exc
+                if attempt + 1 < _RETRY_ATTEMPTS:
+                    time.sleep(_RETRY_BACKOFF * (2 ** attempt))
+                    continue
+                raise
+            if resp.status_code in _RETRYABLE_STATUS or 500 <= resp.status_code < 600:
+                last_exc = RuntimeError(f"OpenRouter {resp.status_code}: {resp.text[:300]}")
+                if attempt + 1 < _RETRY_ATTEMPTS:
+                    time.sleep(_RETRY_BACKOFF * (2 ** attempt))
+                    continue
+                raise last_exc
+            if not 200 <= resp.status_code < 300:
+                raise RuntimeError(f"OpenRouter {resp.status_code}: {resp.text[:300]}")   # 4xx: permanent
+            try:
+                data = resp.json()
+            except (json.JSONDecodeError, ValueError) as exc:
+                raise RuntimeError("OpenRouter returned a non-JSON response") from exc
+            if not isinstance(data, dict):
+                raise RuntimeError("OpenRouter returned a non-object JSON response")
+            return data
+        raise last_exc   # loop always returns or raises above; here only if _RETRY_ATTEMPTS < 1
 
 
 def _token_count(usage: object, key: str) -> int:

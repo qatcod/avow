@@ -108,3 +108,76 @@ def test_malformed_success_response_has_actionable_error():
     c = OpenRouterClient(api_key="k", http_client=BadHTTP())
     with pytest.raises(RuntimeError, match="malformed chat-completion"):
         c.messages.parse(model="m", messages=[], output_format=IntentMatch)
+
+
+import httpx
+import avow.openrouter as orm
+from avow.openrouter import OpenRouterClient
+
+
+class _Resp:
+    def __init__(self, status_code=200, payload=None, text="ok"):
+        self.status_code = status_code
+        self._payload = payload if payload is not None else {"choices": []}
+        self.text = text
+
+    def json(self):
+        return self._payload
+
+
+class _FakeHTTP:
+    """Yields the queued responses/exceptions in order; records call count."""
+    def __init__(self, script):
+        self.script = list(script)
+        self.calls = 0
+
+    def post(self, url, headers=None, json=None, timeout=None):
+        self.calls += 1
+        item = self.script.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+
+def test_post_retries_transient_then_succeeds(monkeypatch):
+    monkeypatch.setattr(orm.time, "sleep", lambda *_: None)   # no real backoff sleeps
+    http = _FakeHTTP([httpx.ConnectError("boom"), _Resp(200, {"choices": []})])
+    c = OpenRouterClient(api_key="k", http_client=http)
+    data = c._post({"model": "m"})
+    assert data == {"choices": []} and http.calls == 2   # retried once, then succeeded
+
+
+def test_post_does_not_retry_4xx(monkeypatch):
+    monkeypatch.setattr(orm.time, "sleep", lambda *_: None)
+    http = _FakeHTTP([_Resp(400, text="bad request")])
+    c = OpenRouterClient(api_key="k", http_client=http)
+    try:
+        c._post({"model": "m"})
+        assert False, "expected RuntimeError"
+    except RuntimeError:
+        pass
+    assert http.calls == 1   # 4xx is permanent -> no retry
+
+
+def test_post_retries_5xx_then_gives_up(monkeypatch):
+    monkeypatch.setattr(orm.time, "sleep", lambda *_: None)
+    http = _FakeHTTP([_Resp(503, text="unavailable")] * orm._RETRY_ATTEMPTS)
+    c = OpenRouterClient(api_key="k", http_client=http)
+    try:
+        c._post({"model": "m"})
+        assert False, "expected RuntimeError after budget"
+    except RuntimeError:
+        pass
+    assert http.calls == orm._RETRY_ATTEMPTS   # bounded
+
+
+def test_post_gives_up_after_transient_budget(monkeypatch):
+    monkeypatch.setattr(orm.time, "sleep", lambda *_: None)
+    http = _FakeHTTP([httpx.ConnectError("x")] * orm._RETRY_ATTEMPTS)
+    c = OpenRouterClient(api_key="k", http_client=http)
+    try:
+        c._post({"model": "m"})
+        assert False, "expected the transient error to surface"
+    except httpx.TransportError:
+        pass
+    assert http.calls == orm._RETRY_ATTEMPTS
