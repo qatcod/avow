@@ -206,11 +206,17 @@ def test_extract_json_no_brace_returns_input():
     assert _extract_json('no json here') == 'no json here'
 
 
+def test_extract_json_closing_brace_inside_string_value():
+    # rfind must pick the outermost object's close brace, not the '}' inside a string value
+    assert _extract_json('{"a": "x}y"}') == '{"a": "x}y"}'
+
+
 def test_client_pools_one_http_client():
     import httpx
     c = OpenRouterClient(api_key="k")            # no http_client injected
-    assert isinstance(c._http, httpx.Client)     # a reusable pooled client, not a per-call post
-    assert c._http is c._http                    # stable across accesses
+    http_ref = c._http
+    assert isinstance(http_ref, httpx.Client)    # a reusable pooled client, not a per-call post
+    assert c._http is http_ref                   # set once in __init__, never recreated
     with OpenRouterClient(api_key="k") as ctx:   # context manager releases it
         assert ctx._http is not None
     assert ctx._http.is_closed
@@ -220,5 +226,6 @@ def test_client_pools_one_http_client():
 def test_injected_http_client_is_not_owned_or_closed():
     fake = _FakeHTTP([_Resp(200, {"choices": []})])
     c = OpenRouterClient(api_key="k", http_client=fake)
+    assert c._owns_http is False                 # explicit: we do not own an injected client
     c.close()                                    # must NOT try to close a client we do not own
     assert c._http is fake
