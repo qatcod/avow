@@ -96,3 +96,10 @@ def test_graveyard_patterns_k_must_be_non_negative():
 
 def test_llm_max_retries_default():
     assert RunConfig().llm_max_retries == 6
+
+
+def test_llm_max_retries_must_be_non_negative():
+    import pytest
+    with pytest.raises(ValueError):
+        RunConfig(llm_max_retries=-1)
+    RunConfig(llm_max_retries=0)   # 0 = no SDK retries, allowed

@@ -181,3 +181,44 @@ def test_post_gives_up_after_transient_budget(monkeypatch):
     except httpx.TransportError:
         pass
     assert http.calls == orm._RETRY_ATTEMPTS
+
+
+from avow.openrouter import _extract_json
+
+
+def test_extract_json_bare_object():
+    assert _extract_json('{"a": 1}') == '{"a": 1}'
+
+
+def test_extract_json_fenced():
+    assert _extract_json('```json\n{"a": 1}\n```') == '{"a": 1}'
+
+
+def test_extract_json_reasoning_then_object():
+    assert _extract_json('Let me think about it... {"a": 1}') == '{"a": 1}'
+
+
+def test_extract_json_object_then_prose():
+    assert _extract_json('{"a": 1}\nThat is my final answer.') == '{"a": 1}'
+
+
+def test_extract_json_no_brace_returns_input():
+    assert _extract_json('no json here') == 'no json here'
+
+
+def test_client_pools_one_http_client():
+    import httpx
+    c = OpenRouterClient(api_key="k")            # no http_client injected
+    assert isinstance(c._http, httpx.Client)     # a reusable pooled client, not a per-call post
+    assert c._http is c._http                    # stable across accesses
+    with OpenRouterClient(api_key="k") as ctx:   # context manager releases it
+        assert ctx._http is not None
+    assert ctx._http.is_closed
+    c.close()
+
+
+def test_injected_http_client_is_not_owned_or_closed():
+    fake = _FakeHTTP([_Resp(200, {"choices": []})])
+    c = OpenRouterClient(api_key="k", http_client=fake)
+    c.close()                                    # must NOT try to close a client we do not own
+    assert c._http is fake

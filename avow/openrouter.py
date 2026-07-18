@@ -42,12 +42,14 @@ class _ParsedResponse:
 
 
 def _extract_json(content: str) -> str:
+    """Best-effort extraction of a single JSON object from a model reply. Slices the outermost
+    ``{ ... }`` (first ``{`` to last ``}``), which transparently handles code fences, reasoning-then-
+    JSON, and trailing prose without fragile brace counting. Structured-output replies are a single
+    object, so first-open to last-close is a safe heuristic; with no ``{`` the input is returned so the
+    caller's schema validation raises its normal error (and the one-shot correction retry can fire)."""
     s = (content or "").strip()
-    if s.startswith("```"):
-        s = s.split("```", 2)[1] if "```" in s[3:] else s[3:]
-        if s.lower().startswith("json"):
-            s = s[4:]
-    return s.strip()
+    i, j = s.find("{"), s.rfind("}")
+    return s[i:j + 1] if 0 <= i < j else s
 
 
 class _Messages:
@@ -128,8 +130,21 @@ class OpenRouterClient:
         self.api_key = api_key or os.environ.get("OPENROUTER_API_KEY")
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
-        self._http = http_client  # injectable for offline tests
+        # Reuse one pooled httpx.Client (avoids a fresh TLS handshake per call over a long run). An
+        # injected client is used as-is and never closed by us (we don't own it).
+        self._owns_http = http_client is None
+        self._http = httpx.Client(timeout=timeout) if http_client is None else http_client
         self.messages = _Messages(self)
+
+    def close(self) -> None:
+        if self._owns_http:
+            self._http.close()
+
+    def __enter__(self) -> "OpenRouterClient":
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
 
     def _post(self, body: dict) -> dict:
         if not self.api_key:
@@ -141,10 +156,7 @@ class OpenRouterClient:
         last_exc = None
         for attempt in range(_RETRY_ATTEMPTS):
             try:
-                if self._http is not None:
-                    resp = self._http.post(url, headers=headers, json=body, timeout=self.timeout)
-                else:
-                    resp = httpx.post(url, headers=headers, json=body, timeout=self.timeout)
+                resp = self._http.post(url, headers=headers, json=body, timeout=self.timeout)
             except httpx.TransportError as exc:   # covers connect errors AND timeouts
                 last_exc = exc
                 if attempt + 1 < _RETRY_ATTEMPTS:

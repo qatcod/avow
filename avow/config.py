@@ -86,6 +86,11 @@ class RunConfig(BaseModel):
                 "graveyard_patterns_k must be >= 0 (the number of recent attack patterns that seed "
                 f"each gauntlet; got {self.graveyard_patterns_k}). Use 0 to disable seeding."
             )
+        if self.llm_max_retries < 0:
+            raise ValueError(
+                f"llm_max_retries must be >= 0 (passed to the Anthropic SDK; got {self.llm_max_retries}). "
+                "Use 0 for no retries."
+            )
         return self
 
     @classmethod
