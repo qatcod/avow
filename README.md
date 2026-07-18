@@ -40,6 +40,23 @@ pip install -e ".[dev]"          # Python 3.11+
 
 The builder drives the [`claude`](https://claude.com/claude-code) CLI (uses its login); the verification hooks use the `anthropic` SDK (`ANTHROPIC_API_KEY`).
 
+Verification clients are injectable. To run a panel or other structured-output verifier across
+providers, use `OpenRouterClient` with OpenRouter model IDs (the selected models must support
+structured outputs):
+
+```python
+from avow.openrouter import OpenRouterClient
+from avow.panel import panel_intent_check
+
+client = OpenRouterClient()  # reads OPENROUTER_API_KEY
+result = panel_intent_check(
+    goal,
+    tests_dir,
+    client,
+    ["google/gemini-2.5-flash", "anthropic/claude-sonnet-4.6"],
+)
+```
+
 ## CLI
 
 ```bash
@@ -48,6 +65,7 @@ avow improve <goal-dir>                     # self-improvement: converge, then p
 avow harden <goal-dir>                       # converge, then escalate: the Examiner writes harder tests targeting the solution, repeat
 avow survive <goal-dir>                       # converge, then survive an execution gauntlet — one counterexample kills the green and it fights back
 avow gauntlet <solution-dir> <goal.md>       # attack an existing solution once: K independent references vs it over a fuzzed input space
+avow graveyard                               # list the global attack-pattern memory (what past deaths have taught Avow)
 avow population <goal-dir> [--hybrid]        # run N candidate solutions; the verifier picks the winner (--hybrid escalates only on plateau)
 avow mutate <solution-dir> <tests-dir>      # suite-strength score for any code (offline AST by default; --llm adds cross-model mutants)
 avow intent-check <goal.md> <tests-dir>     # does this suite actually test this goal?
@@ -58,6 +76,7 @@ avow adjudicate <solution> <tests> <goal.md> # a stalled build: decide BY EXECUT
 avow check <solution-dir>                    # run the configured verifier checks (lint/typecheck/audit/...) on a solution
 avow report <repo>                           # point-and-go: auto-detect a repo's code + tests and mutation-score its suite
 avow calibrate [--llm]                       # measure whether the confidence number is trustworthy (reliability curve)
+avow calibrate --gauntlet [--seed] [--llm]  # the survival-instinct proof: false-high-confidence for plain vs gauntlet-survived vs seeded-graveyard greens
 avow verify <solution> <tests> <goal.md>    # one calibrated confidence number for any artifact
 ```
 
@@ -89,9 +108,15 @@ When a build stalls just short of green, `avow adjudicate` answers *"is this fai
 
 `avow survive` is the survival instinct. After a green, it throws the solution into an **execution gauntlet**: K independently generated reference implementations, differential-fuzzed against it over a large input space. If a *majority* of references diverge on any input, the solution is the outlier and the green is **killed** — the winning reference's differential test is frozen into the suite, the Builder rebuilds, and it faces a fresh gauntlet. It keeps fighting until it survives a full gauntlet clean (`verified_survivor`) or dies honestly at the round cap (`died`, with the exact counterexample). The kill is decided by *execution* against a reference majority, never by opinion, and `verified_survivor` means "survived a K-reference execution gauntlet," not "provably correct." `avow gauntlet` runs one attack on an existing artifact. Ships dormant.
 
+Avow also gets **harder to fool over time**. Every kill is sent to a **Coroner**, which abstracts the concrete counterexample into a transferable *attack pattern* (a class of tricky inputs, not the one literal case), stored in a global **Graveyard** (`~/.avow/graveyard.jsonl`, deduped). Future gauntlets are seeded from it: for a new goal, `avow survive` retrieves the patterns most *relevant* to that goal by keyword overlap (not just the most recent) and steers reference generation to probe those known-tricky input classes. The autopsy is strictly best-effort, so it can never change or crash the execution-decided verdict. `avow graveyard` lists what it has learned. This is a lexical heuristic, not semantic retrieval; it improves on recency without pretending to understand meaning.
+
+That memory arms the *attacker*. Avow also arms the *defender*: within a single `avow survive` run, each kill's abstract lesson is accumulated into an ephemeral **lineage memory** and handed to the Builder on the rebuild, so the heir inherits *why its predecessors died* and steers away from the whole failure class, not just the one input the frozen test already blocks. The inherited lesson is abstract only (the failure class and its description, never the reference implementation or a concrete input), preserving the rule that the Builder never sees tests or references. It is guidance, not a guarantee: the frozen regression test remains the mechanical backstop.
+
 `avow report <repo>` is the point-and-go entry point: aim it at an existing repository and it auto-detects the source modules (including code nested in packages) and the test suite, confirms the suite is green, mutation-tests the real code, and prints the suite-strength score with the surviving mutants pinned to `file:line` (the faults no test caught). No goal file, no flat-module layout, no configuration. If the suite isn't green on the unmutated repo, it reports *why* (the actual pytest failure with a hint — a missing import means `pip install -e .` first; a `src/` layout means point `--source` at the package) rather than a meaningless number. When auto-detection guesses wrong, override it: `avow report <repo> --source src/mypkg --tests tests` (both repeatable).
 
 `avow calibrate` measures whether the confidence number can be *trusted*. It runs a labeled benchmark (goals with a correct reference, injected-bug variants, and an independent oracle for ground truth), scores every variant with the real verifier, and reports the reliability curve plus the **false-high-confidence rate** — the fraction of "trusted" solutions that are actually wrong. Run it whenever the confidence path changes. It's what proved that suite-derived signals alone (mutation + hold-out) miss green-but-wrong solutions whose bugs live in the suite's blind spots, and that folding in the suite-independent reference oracle drives false-high-confidence toward zero — which is why `avow solve` runs the oracle by default.
+
+`avow calibrate --gauntlet` extends that into the survival-instinct proof: it scores the benchmark across three cohorts (plain green, gauntlet-survived with an empty graveyard, and survived with a graveyard **seeded** leave-one-out from *other* goals' deaths) and compares their false-high-confidence. The seeding is leave-one-out with a provenance leakage guard, so a pattern mined from the goal being scored can never inflate its own result. The report is deliberately honest: it prints raw `wrong/trusted (n=...)` counts and refuses to state an "N times less likely" multiplier unless the sample is large enough. Without `--llm` it runs a deterministic stub that demonstrates the mechanism with no API key (labeled `STUB MODE`); with `--llm` it produces real numbers from a single labeled run.
 
 A goal directory holds a `goal.md` (and, optionally, a `avow.yaml` to tune budgets/weights). `avow solve` writes the suite, runs the loop, and reports the verdict plus the confidence breakdown.
 

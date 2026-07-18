@@ -475,3 +475,29 @@ def test_loop_checks_cannot_green_zero_test_suite(tmp_path):
                     checks=[{"name": "ok", "command": ["python", "-c", "import sys; sys.exit(0)"]}])
     r = solve(_goal(tmp_path), cfg, _EmptySuiteExaminer(), FlakyBuilder(), now=lambda: 0.0)
     assert r.success is False
+
+
+class _CapturingBuilder:
+    """Goes green in one attempt; records every goal string it was handed."""
+    def __init__(self):
+        self.goals = []
+
+    def attempt(self, solution_dir, goal, failures):
+        self.goals.append(goal)
+        (Path(solution_dir) / "lib.py").write_text("def add(a, b):\n    return a + b\n")
+        from avow.builder import BuilderOutcome
+        return BuilderOutcome(plan="ok", cost_usd=0.0, raw={})
+
+
+def test_solve_injects_builder_guidance_into_attempt_goal(tmp_path: Path):
+    cfg = RunConfig(max_iterations=5, holdout_fraction=0.0)
+    b = _CapturingBuilder()
+    solve(_goal(tmp_path), cfg, StubExaminer(), b, now=lambda: 0.0, builder_guidance="LINEAGE-LESSON-XYZ")
+    assert b.goals and all("LINEAGE-LESSON-XYZ" in g for g in b.goals)
+
+
+def test_solve_without_guidance_leaves_goal_unchanged(tmp_path: Path):
+    cfg = RunConfig(max_iterations=5, holdout_fraction=0.0)
+    b = _CapturingBuilder()
+    solve(_goal(tmp_path), cfg, StubExaminer(), b, now=lambda: 0.0)
+    assert b.goals and all(g.strip() == "Build add(a, b) returning a + b." for g in b.goals)

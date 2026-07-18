@@ -55,6 +55,7 @@ def solve(
     *,
     now=time.monotonic,
     write_tests: bool = True,
+    builder_guidance: str = "",
     confirm=None,
     mutation_client=None,
     intent_client=None,
@@ -141,6 +142,9 @@ def solve(
     attempt_history: list = []
     supervisor_fired = False
     supervisor_hint = None
+    # Static caller guidance (e.g. survive's lineage lessons) folded into every attempt's goal, next
+    # to the dynamic Supervisor hint. Empty by default -> byte-identical to no guidance.
+    base_goal = goal if not builder_guidance else f"{goal}\n\n{builder_guidance}"
 
     while True:
         stopped = budget.exhausted(now())
@@ -151,7 +155,7 @@ def solve(
         budget.tick_iteration()
         workspace.seed_from(best_dir if have_best else None)
 
-        attempt_goal = goal if supervisor_hint is None else f"{goal}\n\nSUPERVISOR GUIDANCE: {supervisor_hint}"
+        attempt_goal = base_goal if supervisor_hint is None else f"{base_goal}\n\nSUPERVISOR GUIDANCE: {supervisor_hint}"
         outcome = builder.attempt(workspace.solution_dir, attempt_goal, best_failures)
         budget.charge_usd(outcome.cost_usd)
 
