@@ -115,6 +115,7 @@ class CalibrationProof:
     survived_seeded: Cohort
     seeded_ran: bool = True   # False when the proof ran without --seed; keeps honesty() from implying
                               # the seeded graveyard was tried and caught nothing
+    skipped: int = 0          # items dropped due to transient errors (coverage is then undercounted)
 
     def honesty(self, min_n: int = 8) -> str:
         """Raw counts always; an 'N x less likely' multiplier ONLY when both compared cohorts have
@@ -140,6 +141,9 @@ class CalibrationProof:
             lines.append(f"seeded vs empty wrong-when-trusted: {self.survived_seeded.wrong} vs {e.wrong}")
         else:
             lines.append("(seeded cohort not run; pass --seed to measure the graveyard's marginal value)")
+        if self.skipped:
+            lines.append(f"coverage: {self.skipped} item(s) skipped due to transient errors "
+                         "-- cohorts are undercounted")
         return "\n".join(lines)
 
 
@@ -160,33 +164,43 @@ def run_calibration_proof(goals, seed_bug_for, config, clients, *, min_n=8, use_
     survived_empty = Cohort("survived (empty graveyard)", 0, 0)
     survived_seeded = Cohort("survived (seeded graveyard)", 0, 0)
 
+    skipped = 0
     for g in goals:
         # Seeding is per-goal (leave-one-out over the OTHER goals), not per-variant: mine the seed
         # patterns once and reuse them for every variant of this goal (avoids re-mining N times).
+        # Mining is independent of scoring, so a transient mining failure only drops this goal's seed
+        # patterns (its plain/empty cohorts are still scored below) and counts as one skipped item.
         seed_descriptions = []
         if with_seed:
-            mine_goals = [(og, seed_bug_for(og)) for og in goals if og.name != g.name]
-            pats = build_seeded_patterns(mine_goals, g.name, config, clients.mining_for, clients.coroner)
-            seed_descriptions = [p.description for p in pats]
+            try:
+                mine_goals = [(og, seed_bug_for(og)) for og in goals if og.name != g.name]
+                pats = build_seeded_patterns(mine_goals, g.name, config, clients.mining_for, clients.coroner)
+                seed_descriptions = [p.description for p in pats]
+            except Exception:
+                skipped += 1
 
         for vname, src in g.variants.items():
-            row = _evaluate_variant(g, src, config, clients.oracle)
-            row.variant = vname
-            if not is_trusted(row, config.confidence_threshold, use_oracle):
-                continue
-            plain.trusted += 1
-            plain.wrong += int(not row.correct)
+            # A transient failure scoring one variant drops just that variant, keeping the sweep alive.
+            try:
+                row = _evaluate_variant(g, src, config, clients.oracle)
+                row.variant = vname
+                if not is_trusted(row, config.confidence_threshold, use_oracle):
+                    continue
+                plain.trusted += 1
+                plain.wrong += int(not row.correct)
 
-            empty = score_with_gauntlet(g, src, config, clients.scoring_for(g), patterns=[])
-            if empty.survived:
-                survived_empty.trusted += 1
-                survived_empty.wrong += int(not row.correct)
+                empty = score_with_gauntlet(g, src, config, clients.scoring_for(g), patterns=[])
+                if empty.survived:
+                    survived_empty.trusted += 1
+                    survived_empty.wrong += int(not row.correct)
 
-            if with_seed:
-                seeded = score_with_gauntlet(g, src, config, clients.scoring_for(g),
-                                             patterns=seed_descriptions)
-                if seeded.survived:
-                    survived_seeded.trusted += 1
-                    survived_seeded.wrong += int(not row.correct)
+                if with_seed:
+                    seeded = score_with_gauntlet(g, src, config, clients.scoring_for(g),
+                                                 patterns=seed_descriptions)
+                    if seeded.survived:
+                        survived_seeded.trusted += 1
+                        survived_seeded.wrong += int(not row.correct)
+            except Exception:
+                skipped += 1
 
-    return CalibrationProof(plain, survived_empty, survived_seeded, seeded_ran=with_seed)
+    return CalibrationProof(plain, survived_empty, survived_seeded, seeded_ran=with_seed, skipped=skipped)

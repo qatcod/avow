@@ -78,3 +78,36 @@ def test_run_proof_seeded_catches_more_false_greens_than_empty():
     assert proof.plain.wrong >= 2
     # the empty (weak) gauntlet misses them; the seeded (strong) gauntlet kills them
     assert proof.survived_seeded.wrong < proof.survived_empty.wrong
+
+
+def test_run_proof_tolerates_a_failing_item(monkeypatch):
+    import avow.calibration_gauntlet as cg
+    from avow.calibration import CalibrationRow
+    from avow.calibration_benchmark import FAMILY_GOALS
+    from avow.config import RunConfig
+
+    goals = [g for g in FAMILY_GOALS if g.name in ("compare_semver", "max_version")]
+
+    def flaky_eval(goal, src, config, oracle_client):
+        if goal.name == "compare_semver":
+            raise RuntimeError("transient API error")
+        return CalibrationRow(goal=goal.name, variant="", green=True, confidence=1.0,
+                              oracle_agreement=None, correct=True)
+
+    monkeypatch.setattr(cg, "_evaluate_variant", flaky_eval)
+    monkeypatch.setattr(cg, "score_with_gauntlet", lambda *a, **k: cg.GauntletScore(True, True, 3))
+    monkeypatch.setattr(cg, "build_seeded_patterns", lambda *a, **k: [])
+
+    clients = cg.ProofClients(scoring_for=lambda g: object(), mining_for=lambda g: object(),
+                              coroner=object(), oracle=None)
+    proof = cg.run_calibration_proof(goals, lambda g: "bug_lexical", RunConfig(), clients, with_seed=True)
+    assert proof.skipped == 2                      # compare_semver's 2 variants both skipped
+    assert proof.plain.trusted == 2                # max_version's 2 variants still scored -> run completed
+    assert "skipped due to transient errors" in proof.honesty()
+
+
+def test_run_proof_no_failures_has_no_coverage_line():
+    from avow.calibration_gauntlet import Cohort, CalibrationProof
+    out = CalibrationProof(Cohort("plain-green", 0, 2), Cohort("survived (empty graveyard)", 0, 2),
+                           Cohort("survived (seeded graveyard)", 0, 2)).honesty()
+    assert "skipped" not in out                    # skipped defaults to 0 -> unchanged output
