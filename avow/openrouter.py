@@ -166,7 +166,10 @@ class OpenRouterClient:
             if not isinstance(data, dict):
                 raise RuntimeError("OpenRouter returned a non-object JSON response")
             return data
-        raise last_exc   # loop always returns or raises above; here only if _RETRY_ATTEMPTS < 1
+        # The loop always returns or raises above; this is only reached if _RETRY_ATTEMPTS < 1.
+        if last_exc is not None:
+            raise last_exc
+        raise RuntimeError("_RETRY_ATTEMPTS must be >= 1")
 
 
 def _token_count(usage: object, key: str) -> int:

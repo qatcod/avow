@@ -171,13 +171,20 @@ def run_calibration_proof(goals, seed_bug_for, config, clients, *, min_n=8, use_
         # Mining is independent of scoring, so a transient mining failure only drops this goal's seed
         # patterns (its plain/empty cohorts are still scored below) and counts as one skipped item.
         seed_descriptions = []
+        seed_failed = False
         if with_seed:
             try:
                 mine_goals = [(og, seed_bug_for(og)) for og in goals if og.name != g.name]
                 pats = build_seeded_patterns(mine_goals, g.name, config, clients.mining_for, clients.coroner)
                 seed_descriptions = [p.description for p in pats]
+            except LeakageError:
+                raise   # a leave-one-out violation is a programming error, NEVER a transient skip
             except Exception:
+                # This goal has no seed patterns. Its variants must NOT enter the seeded cohort with
+                # empty-gauntlet results (that would contaminate the seeded-vs-empty comparison); the
+                # seeded cohort is genuinely undercounted for this goal instead, which honesty() reports.
                 skipped += 1
+                seed_failed = True
 
         for vname, src in g.variants.items():
             # A transient failure scoring one variant drops just that variant, keeping the sweep alive.
@@ -194,7 +201,7 @@ def run_calibration_proof(goals, seed_bug_for, config, clients, *, min_n=8, use_
                     survived_empty.trusted += 1
                     survived_empty.wrong += int(not row.correct)
 
-                if with_seed:
+                if with_seed and not seed_failed:
                     seeded = score_with_gauntlet(g, src, config, clients.scoring_for(g),
                                                  patterns=seed_descriptions)
                     if seeded.survived:

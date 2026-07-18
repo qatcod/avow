@@ -412,8 +412,7 @@ def _cmd_calibrate(args) -> int:
     config = RunConfig.from_yaml(args.config) if args.config else RunConfig()
     oracle_client = None
     if args.llm:
-        import anthropic
-        oracle_client = anthropic.Anthropic()
+        oracle_client = _anthropic(config)   # multi-goal sweep -> same transient-failure exposure
     report = run_calibration(DEFAULT_GOALS, config, oracle_client=oracle_client)
     use_oracle = args.llm
 
